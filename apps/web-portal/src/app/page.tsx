@@ -33,9 +33,7 @@ export default function HomePage() {
     setError(null);
     try {
       const response = await fetch(`${apiBase}/health`);
-      if (!response.ok) {
-        throw new Error(`健康檢查回應 ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`健康檢查回應 ${response.status}`);
       setHealth((await response.json()) as HealthResponse);
     } catch (caught) {
       setHealth(null);
@@ -54,35 +52,37 @@ export default function HomePage() {
     : "尚無種子資料";
 
   return (
-    <main>
-      <h1>企業多代理協作平台</h1>
-      <p className="lede">平台骨架入口。這裡只確認基礎設施、資料庫與內建種子已就緒。</p>
-      <section className="panel" aria-live="polite">
-        <ul className="status-list">
-          <li>
-            <span>整體狀態</span>
-            <strong className={health?.status === "ok" ? "ok" : "error"}>
-              {error ? "無法連線" : health?.status === "ok" ? "可提供服務" : loading ? "讀取中" : "尚未就緒"}
-            </strong>
-          </li>
-          <li>
-            <span>PostgreSQL</span>
-            <strong className={health?.postgres === "ok" ? "ok" : "error"}>{label(health?.postgres, error !== null)}</strong>
-          </li>
-          <li>
-            <span>Redis</span>
-            <strong className={health?.redis === "ok" ? "ok" : "error"}>{label(health?.redis, error !== null)}</strong>
-          </li>
-          <li>
-            <span>內建種子</span>
-            <strong>{error ? "無法讀取" : seedText}</strong>
-          </li>
-        </ul>
-        {error ? <p className="error">{error}</p> : null}
-        <button type="button" onClick={() => void refresh()} disabled={loading}>
-          {loading ? "檢查中" : "重新檢查"}
-        </button>
-      </section>
-    </main>
+    <div className="stage-scroll">
+      <div className="health-page">
+        <h1>企業多代理協作平台</h1>
+        <p className="note">這裡確認基礎設施、資料庫與內建種子。協作請從左側進入協作區。</p>
+        <section className="panel" aria-live="polite">
+          <ul className="status-list">
+            <li>
+              <span>整體狀態</span>
+              <strong className={health?.status === "ok" ? "ok" : "error"}>
+                {error ? "無法連線" : health?.status === "ok" ? "可提供服務" : loading ? "讀取中" : "尚未就緒"}
+              </strong>
+            </li>
+            <li>
+              <span>PostgreSQL</span>
+              <strong className={health?.postgres === "ok" ? "ok" : "error"}>{label(health?.postgres, error !== null)}</strong>
+            </li>
+            <li>
+              <span>Redis</span>
+              <strong className={health?.redis === "ok" ? "ok" : "error"}>{label(health?.redis, error !== null)}</strong>
+            </li>
+            <li>
+              <span>內建種子</span>
+              <strong>{error ? "無法讀取" : seedText}</strong>
+            </li>
+          </ul>
+          {error ? <p className="error">{error}</p> : null}
+          <button className="text-button primary" type="button" onClick={() => void refresh()} disabled={loading}>
+            {loading ? "檢查中" : "重新檢查"}
+          </button>
+        </section>
+      </div>
+    </div>
   );
 }

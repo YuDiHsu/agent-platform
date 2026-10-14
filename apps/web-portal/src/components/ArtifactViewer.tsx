@@ -1,0 +1,203 @@
+"use client";
+
+import { useEffect, useId, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+import { useWorkspaceStore, type RightPaneTab } from "@/lib/store/useWorkspaceStore";
+
+const TABS: Array<{ id: RightPaneTab; label: string }> = [
+  { id: "ARTIFACT", label: "產出物" },
+  { id: "FILE_DIFF", label: "差異" },
+  { id: "TERMINAL_CLI", label: "終端機" },
+  { id: "LIVE_DAG", label: "即時 DAG" },
+  { id: "PROMPT_INSPECTOR", label: "提示詞" },
+];
+
+function MermaidBlock({ code }: { code: string }) {
+  const reactId = useId().replace(/:/g, "");
+  const [svg, setSvg] = useState("");
+  const [error, setError] = useState("");
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void import("mermaid").then(async (module) => {
+      const mermaid = module.default;
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "neutral" });
+      try {
+        const rendered = await mermaid.render(`mermaid-${reactId}`, code);
+        if (!cancelled) setSvg(rendered.svg);
+      } catch {
+        if (!cancelled) setError("這段 Mermaid 圖無法繪製。");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [code, reactId]);
+
+  return (
+    <figure>
+      <figcaption className="diagram-toolbar">
+        <button type="button" onClick={() => setScale((value) => Math.min(2.4, value + 0.2))}>
+          放大
+        </button>
+        <button type="button" onClick={() => setScale((value) => Math.max(0.4, value - 0.2))}>
+          縮小
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setScale(1);
+            setOffset({ x: 0, y: 0 });
+          }}
+        >
+          重設
+        </button>
+        <button type="button" onClick={() => setOffset((value) => ({ ...value, y: value.y - 24 }))}>
+          上移
+        </button>
+        <button type="button" onClick={() => setOffset((value) => ({ ...value, y: value.y + 24 }))}>
+          下移
+        </button>
+      </figcaption>
+      {error ? <p className="error">{error}</p> : null}
+      <div
+        className="diagram-frame"
+        onPointerDown={(event) => {
+          drag.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
+        }}
+        onPointerMove={(event) => {
+          if (!drag.current) return;
+          setOffset({ x: event.clientX - drag.current.x, y: event.clientY - drag.current.y });
+        }}
+        onPointerUp={() => {
+          drag.current = null;
+        }}
+      >
+        <div
+          style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`, transformOrigin: "top left" }}
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      </div>
+    </figure>
+  );
+}
+
+function MarkdownBody({ content }: { content: string }) {
+  const parts = content.split(/```mermaid\n([\s\S]*?)```/g);
+  return (
+    <div className="markdown">
+      {parts.map((part, index) =>
+        index % 2 === 1 ? (
+          <MermaidBlock key={`diagram-${index}`} code={part.trim()} />
+        ) : (
+          <ReactMarkdown key={`md-${index}`} remarkPlugins={[remarkGfm]}>
+            {part}
+          </ReactMarkdown>
+        ),
+      )}
+    </div>
+  );
+}
+
+export function ArtifactWorkbench() {
+  const activeRightTab = useWorkspaceStore((state) => state.activeRightTab);
+  const setRightTab = useWorkspaceStore((state) => state.setRightTab);
+  const artifacts = useWorkspaceStore((state) => state.artifacts);
+  const selectedArtifactId = useWorkspaceStore((state) => state.selectedArtifactId);
+  const dagSteps = useWorkspaceStore((state) => state.dagSteps);
+  const selected = artifacts.find((item) => item.artifact_id === selectedArtifactId) ?? artifacts[0];
+  const [width, setWidth] = useState(42);
+
+  function download() {
+    if (!selected) return;
+    const blob = new Blob([selected.content_body], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selected.title || "artifact"}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="workbench" aria-label="右側工作台" style={{ width: `${width}%` }}>
+      <div className="tabs">
+        <div role="tablist" aria-label="工作台分頁" style={{ display: "flex", gap: 6 }}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className="tab"
+            role="tab"
+            id={`tab-${tab.id}`}
+            aria-selected={activeRightTab === tab.id}
+            aria-controls={`panel-${tab.id}`}
+            onClick={() => setRightTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+        </div>
+        <button type="button" className="tab" onClick={() => setWidth((value) => Math.max(28, value - 4))}>
+          縮窄
+        </button>
+        <button type="button" className="tab" onClick={() => setWidth((value) => Math.min(62, value + 4))}>
+          加寬
+        </button>
+      </div>
+      <div
+        className="workbench-body"
+        role="tabpanel"
+        id={`panel-${activeRightTab}`}
+        aria-labelledby={`tab-${activeRightTab}`}
+      >
+        {activeRightTab === "ARTIFACT" ? (
+          selected ? (
+            <>
+              <h2>{selected.title}</h2>
+              <p className="note">
+                {selected.producer_role} · {selected.artifact_type}
+              </p>
+              <MarkdownBody content={selected.content_body} />
+            </>
+          ) : (
+            <p className="empty">還沒有交付物。角色完成工單後，完整內容會出現在這裡。</p>
+          )
+        ) : null}
+        {activeRightTab === "LIVE_DAG" ? (
+          dagSteps.length === 0 ? (
+            <p className="empty">主代理還沒有拆出工單。</p>
+          ) : (
+            <ol>
+              {dagSteps.map((step) => (
+                <li key={step.step_id}>
+                  {step.step_id}. {step.target_role_code} {step.task_title}
+                  {step.depends_on_steps.length > 0 ? `（依賴 ${step.depends_on_steps.join("、")}）` : ""}
+                </li>
+              ))}
+            </ol>
+          )
+        ) : null}
+        {activeRightTab === "FILE_DIFF" ? <p className="empty">本機寫入的紅綠差異會在檔案橋接完成後出現。</p> : null}
+        {activeRightTab === "TERMINAL_CLI" ? <p className="empty">技能的終端機輸出會在沙盒執行完成後出現。</p> : null}
+        {activeRightTab === "PROMPT_INSPECTOR" ? <p className="empty">洋蔥式提示詞檢視會在規範編譯完成後出現。</p> : null}
+      </div>
+      {activeRightTab === "ARTIFACT" && selected ? (
+        <div className="workbench-footer">
+          <button type="button" onClick={download}>
+            匯出 .md
+          </button>
+          <button type="button" disabled>
+            直接寫入本機掛載資料夾
+          </button>
+          <p className="note">尚未掛載本機資料夾，所以不能寫入磁碟。</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}

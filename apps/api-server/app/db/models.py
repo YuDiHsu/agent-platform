@@ -1,4 +1,4 @@
-"""Thirteen-table platform schema. Implements: REQ-001, REQ-008, REQ-012, ADR-0001."""
+"""Platform schema. Implements: REQ-001, REQ-002, REQ-008, REQ-012, ADR-0001, ADR-0003."""
 
 import uuid
 from datetime import datetime
@@ -54,6 +54,9 @@ class User(Base):
     job_title: Mapped[str | None] = mapped_column(String(100))
     sso_subject_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     is_admin: Mapped[bool | None] = mapped_column(Boolean, server_default=text("false"))
+    max_concurrent_tickets: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4"))
+    token_quota_limit: Mapped[int | None] = mapped_column(Integer)
+    tokens_consumed_total: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     created_at: Mapped[datetime | None] = _created_at()
 
 
@@ -445,4 +448,57 @@ class AgentMemory(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime | None] = _created_at()
+
+
+class ChatSession(Base):
+    """Cross-login conversation, DAG snapshot, and hibernation checkpoint."""
+
+    __tablename__ = "chat_sessions"
+    __table_args__ = (Index("ix_chat_sessions_user_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'ACTIVE'"))
+    active_role_code: Mapped[str | None] = mapped_column(String(64))
+    goal_statement: Mapped[str | None] = mapped_column(Text)
+    dag_snapshot: Mapped[list[Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    checkpoint: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    hold_reason: Mapped[str | None] = mapped_column(String(40))
+    created_at: Mapped[datetime | None] = _created_at()
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class ChatMessage(Base):
+    """One persisted bubble: user text, role switch, artifact pointer, or tool event."""
+
+    __tablename__ = "chat_messages"
+    __table_args__ = (Index("ix_chat_messages_session_id", "session_id"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     created_at: Mapped[datetime | None] = _created_at()

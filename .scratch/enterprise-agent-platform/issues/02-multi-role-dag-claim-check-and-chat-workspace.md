@@ -6,12 +6,16 @@
 
 **Status:** ready-for-agent
 
-- [ ] 新增增量資料庫遷移以建立 `chat_sessions` 與 `chat_messages` 表，持久化每次對話階段、所有角色訊息氣泡、工具呼叫事件與 DAG 步驟狀態（`ADR-0002`, `ADR-0003`）
-- [ ] `ORCH` 可將跨領域需求拆解為具備 `depends_on_steps` 的無環任務圖（DAG），隨工單傳遞濃縮的最高指導目標（Goal Ancestry），並支援 `max_hops = 8` 硬性斷路器（超過上限自動中止並標記為 `CIRCUIT_BROKEN`）（`REQ-001`, `REQ-002`, `TC-M1-02`）
-- [ ] 實作與瀏覽器斷線脫鉤的背景執行與「零待機休眠（Checkpoint Hibernation）」：當工單進入等待狀態（如 `WAITING_HITL`、`WAITING_BROWSER` 或 `PAUSED_QUOTA_EXCEEDED`）時，狀態存入 PostgreSQL Checkpoint 後立即釋放協程與資料庫連線（佔用 0% CPU/RAM），並限制每位使用者同時處於 `IN_PROGRESS` 的併發工單配額（`ADR-0002`, `ADR-0003`）
-- [ ] 提供 `GET /api/v1/users/me/bootstrap` 與 `GET /api/v1/chat/sessions/{session_id}/state`：當使用者呼叫 `PM` 做事後關閉 App，隔天重新登入時，前端 `useWorkspaceStore` 自動還原完整的歷史對話、頂部 DAG 進度列、`PM` 的最新執行狀態、產出物與待審批卡片（`ADR-0002`, `ADR-0003`）
-- [ ] 子代理完成任務時，完整長文內容寫入 `shared_artifacts`，狀態機僅保留含 `artifact_id`、標題、類別與 200 字內摘要的 Claim-Check 指標（`REQ-008`, `ADR-002`）
-- [ ] 對話串流端點透過 SSE 依序推播 `orchestrator_plan`、`role_switched`、`artifact_created` 與 `final_response` 事件，並在等待推論或外部 I/O 期間釋放 SQLAlchemy `AsyncSession`（`REQ-010`, `ADR-0002`）
-- [ ] 前端提供三欄式自適應應用殼層與全域 Zustand 狀態機：收到 `orchestrator_plan` 時自動展開右側 `LIVE_DAG` 分頁並更新頂部橫向迷你 DAG 進度列；收到 `artifact_created` 時自動展開右側 `ARTIFACT` 分頁渲染 Markdown 與可縮放平移的 Mermaid 圖表（`REQ-010`, `UI_SPEC.md`）
-- [ ] 組織圖頁面支援切換「代理組織拓撲圖（React Flow）」與「工單看板與 Token 追蹤」雙視圖，點擊任一角色節點（如 `PM`）可展開側邊抽屜檢視該角色跨日期的歷史工單、Token 消耗進度與已綁定技能（`REQ-010`, `UI_SPEC.md`, `ADR-0003`）
-- [ ] 符合 `PRODUCT.md` 無障礙（WCAG 2.1 AA）與跨裝置響應式規範：深淺色主題對比度達標、狀態徽章同時具備圖示與文字標籤、支援完整鍵盤導覽與 `aria-live` 串流宣告；在行動端與小螢幕下，左側導覽與右側工作台自動收合為側邊／底部抽屜（Drawer / Sheet）（`PRODUCT.md`）
+- [x] 新增增量資料庫遷移以建立 `chat_sessions` 與 `chat_messages` 表，持久化每次對話階段、所有角色訊息氣泡、工具呼叫事件與 DAG 步驟狀態（`ADR-0002`, `ADR-0003`）
+- [x] `ORCH` 可將跨領域需求拆解為具備 `depends_on_steps` 的無環任務圖（DAG），隨工單傳遞濃縮的最高指導目標（Goal Ancestry），並支援 `max_hops = 8` 硬性斷路器（超過上限自動中止並標記為 `CIRCUIT_BROKEN`）（`REQ-001`, `REQ-002`, `TC-M1-02`）
+- [x] 實作與瀏覽器斷線脫鉤的背景執行與「零待機休眠（Checkpoint Hibernation）」：當工單進入等待狀態（如 `WAITING_HITL`、`WAITING_BROWSER` 或 `PAUSED_QUOTA_EXCEEDED`）時，狀態存入 PostgreSQL Checkpoint 後立即釋放協程與資料庫連線（佔用 0% CPU/RAM），並限制每位使用者同時處於 `IN_PROGRESS` 的併發工單配額（`ADR-0002`, `ADR-0003`）
+- [x] 提供 `GET /api/v1/users/me/bootstrap` 與 `GET /api/v1/chat/sessions/{session_id}/state`：當使用者呼叫 `PM` 做事後關閉 App，隔天重新登入時，前端 `useWorkspaceStore` 自動還原完整的歷史對話、頂部 DAG 進度列、`PM` 的最新執行狀態、產出物與待審批卡片（`ADR-0002`, `ADR-0003`）
+- [x] 子代理完成任務時，完整長文內容寫入 `shared_artifacts`，狀態機僅保留含 `artifact_id`、標題、類別與 200 字內摘要的 Claim-Check 指標（`REQ-008`, `ADR-002`）
+- [x] 對話串流端點透過 SSE 依序推播 `orchestrator_plan`、`role_switched`、`artifact_created` 與 `final_response` 事件，並在等待推論或外部 I/O 期間釋放 SQLAlchemy `AsyncSession`（`REQ-010`, `ADR-0002`）
+- [x] 前端提供三欄式自適應應用殼層與全域 Zustand 狀態機：收到 `orchestrator_plan` 時自動展開右側 `LIVE_DAG` 分頁並更新頂部橫向迷你 DAG 進度列；收到 `artifact_created` 時自動展開右側 `ARTIFACT` 分頁渲染 Markdown 與可縮放平移的 Mermaid 圖表（`REQ-010`, `UI_SPEC.md`）
+- [x] 組織圖頁面支援切換「代理組織拓撲圖（React Flow）」與「工單看板與 Token 追蹤」雙視圖，點擊任一角色節點（如 `PM`）可展開側邊抽屜檢視該角色跨日期的歷史工單、Token 消耗進度與已綁定技能（`REQ-010`, `UI_SPEC.md`, `ADR-0003`）
+- [x] 符合 `PRODUCT.md` 無障礙（WCAG 2.1 AA）與跨裝置響應式規範：深淺色主題對比度達標、狀態徽章同時具備圖示與文字標籤、支援完整鍵盤導覽與 `aria-live` 串流宣告；在行動端與小螢幕下，左側導覽與右側工作台自動收合為側邊／底部抽屜（Drawer / Sheet）（`PRODUCT.md`）
+
+## Comments
+
+- 2026-10-14: 對話工作區已接到 HTTP/SSE 接縫。`0002_chat_workspace` 建立 `chat_sessions` / `chat_messages`，並為既有 `0001` 資料庫補上每人併發與 Token 額度欄位。編排在推論期間關閉資料庫交易；等待審批、瀏覽器或額度時把 Claim-Check 指標寫入 checkpoint 後結束協程。前端協作區與組織圖可在窄螢幕以抽屜操作。審批按鈕的正式送出留在後續安全閘門。

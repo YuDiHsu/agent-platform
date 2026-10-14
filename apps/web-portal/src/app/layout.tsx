@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { AppShell } from "@/components/AppShell";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "企業多代理協作平台",
-  description: "平台最小可行骨架入口",
+  title: "Enterprise Agent Hub",
+  description: "企業多代理協作工作區",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-Hant">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
