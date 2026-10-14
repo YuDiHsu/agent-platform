@@ -37,6 +37,7 @@ wheels/
 .installed.cfg
 *.egg
 .pytest_cache/
+.pglite-home/
 .mypy_cache/
 .ruff_cache/
 .coverage

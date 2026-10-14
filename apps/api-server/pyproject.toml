@@ -1,0 +1,47 @@
+[project]
+name = "eamp-api"
+version = "0.1.0"
+description = "Enterprise multi-agent platform API walking skeleton"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "openai>=1.60",
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+    "redis>=5.2",
+    "sqlalchemy[asyncio]>=2.0",
+    "uvicorn>=0.34",
+]
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.26",
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "types-pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["app"]
+warn_unused_ignores = true
+disallow_any_generics = true
+
+[[tool.mypy.overrides]]
+module = ["pgvector.*", "alembic.*"]
+ignore_missing_imports = true
+
+[tool.uv]
+package = false

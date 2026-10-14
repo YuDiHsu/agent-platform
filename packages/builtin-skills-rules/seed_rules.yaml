@@ -1,0 +1,62 @@
+# 內建企業規範種子。全公司強制 2 條，角色專屬 3 條。
+version: "1.0"
+rules:
+  - code: RULE_GLOBAL_ZH_TW
+    name: 全公司繁體中文與台灣資訊用語
+    scope_type: GLOBAL_MANDATORY
+    department: null
+    priority: 10
+    glob_trigger: null
+    bound_role_codes: [ORCH, CEO, PM, FIN, SA, ARCH, SE]
+    rule_content_markdown: |
+      所有對使用者可見的產出必須使用繁體中文（zh-TW）。
+      資訊用語採用台灣慣用詞：專案、資料庫、非同步、伺服器、權杖。
+      禁止以簡體中文或未在地化的英文術語直接回覆使用者。
+
+  - code: RULE_GLOBAL_ZERO_TRUST_DLP
+    name: 全公司零信任與資料外洩防護
+    scope_type: GLOBAL_MANDATORY
+    department: null
+    priority: 20
+    glob_trigger: null
+    bound_role_codes: [ORCH, CEO, PM, FIN, SA, ARCH, SE]
+    rule_content_markdown: |
+      禁止在回覆、日誌或交付物中洩漏密鑰、權杖、連線字串或個人識別資訊。
+      引用檔案或信件時必須標明來源檔名或主旨。
+      不得將其他使用者的本機掛載內容帶入當前對話。
+
+  - code: RULE_SA_OPENAPI_AND_ERD
+    name: 系統分析師 OpenAPI 與資料模型規範
+    scope_type: ROLE_EXCLUSIVE
+    department: RD
+    priority: 100
+    glob_trigger: "**/*.{yaml,yml,json,sql}"
+    bound_role_codes: [SA]
+    rule_content_markdown: |
+      資料表名稱使用 snake_case 複數名詞。
+      每張業務資料表包含標準稽核欄位（建立時間；必要時包含更新時間）。
+      API 錯誤回應遵循 OpenAPI 3.1 錯誤結構，並給出穩定的 error_code。
+
+  - code: RULE_FIN_TWD_THREE_SCENARIOS
+    name: 財務專家新台幣與三情境試算
+    scope_type: ROLE_EXCLUSIVE
+    department: FINANCE
+    priority: 100
+    glob_trigger: null
+    bound_role_codes: [FIN]
+    rule_content_markdown: |
+      金額預設使用新台幣，並以 NT$ 標示。
+      硬體採直線法折舊，年限 36 個月。
+      ROI 必須同時列出保守、基準、樂觀三種情境。
+
+  - code: RULE_SE_PYTHON_TS_STRICT
+    name: 資深工程師 Python 與 TypeScript 嚴格規範
+    scope_type: ROLE_EXCLUSIVE
+    department: RD
+    priority: 100
+    glob_trigger: "**/*.{py,ts,tsx}"
+    bound_role_codes: [SE]
+    rule_content_markdown: |
+      Python 3.12 程式碼必須具備完整型別標註。
+      資料庫存取使用 SQLAlchemy 2.0 AsyncSession。
+      禁止留下未完成的實作標記。

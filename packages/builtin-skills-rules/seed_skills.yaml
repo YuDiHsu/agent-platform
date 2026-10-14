@@ -1,0 +1,64 @@
+# 內建技能種子。4 項技能與其角色綁定。
+version: "1.0"
+skills:
+  - code: SKILL_COMMON_MEETING_ACTION_ITEMS
+    name: 會議待辦整理
+    visibility_scope: GLOBAL
+    department: null
+    execution_mode: PROMPT_ONLY
+    trigger_description: 會議紀錄、逐字稿或討論摘要需要整理成待辦、負責人與期限時使用。
+    required_tool_namespaces: []
+    cli_config: null
+    bound_role_codes: [PM, SA, ARCH, CEO]
+    sop_markdown: |
+      1. 只根據已提供的會議內容整理，不補寫未出現的決議。
+      2. 每一項待辦包含事項、負責人與期限；缺少的欄位標成「待確認」。
+      3. 產出使用繁體中文，並在結尾列出未決議題。
+
+  - code: SKILL_SA_OPENAPI_CLI_VALIDATOR
+    name: OpenAPI 規格檢查
+    visibility_scope: GLOBAL
+    department: RD
+    execution_mode: SERVER_SANDBOX_CLI
+    trigger_description: 需要檢查 OpenAPI 規格檔是否可被解析且包含 openapi 版本欄位時使用。
+    required_tool_namespaces: [local_fs]
+    bound_role_codes: [SA, ARCH]
+    cli_config:
+      action_tier: READ
+      command_template: python3 /opt/skill-scripts/validate_openapi.py --file {{target_file}}
+    sop_markdown: |
+      1. 先取得規格檔路徑，再以沙盒腳本檢查，不在提示詞中心算 JSON 結構。
+      2. 命令模板為 `python3 /opt/skill-scripts/validate_openapi.py --file {{target_file}}`。
+      3. 腳本失敗時回報退出碼與錯誤摘要，不把檔案內容改寫進資料庫。
+
+  - code: SKILL_FIN_PYTHON_IRR_CALCULATOR
+    name: NPV 與 IRR 計算機
+    visibility_scope: GLOBAL
+    department: FINANCE
+    execution_mode: SERVER_SANDBOX_CLI
+    trigger_description: 需要以確定性算式計算 NPV、IRR 或回收期，而不是由模型心算時使用。
+    required_tool_namespaces: []
+    bound_role_codes: [FIN]
+    cli_config:
+      action_tier: READ
+      command_template: python3 /opt/skill-scripts/fin_calculator.py --cashflows {{cashflows}} --rate {{rate}}
+    sop_markdown: |
+      1. 現金流以逗號分隔，第 0 期為初始投入（通常為負數）。
+      2. 折現率 `rate` 使用小數，例如 0.08 代表 8%。
+      3. 將腳本回傳的 NPV、IRR 與回收期抄入財務模型，並註明假設。
+
+  - code: SKILL_SE_PYTEST_AND_GIT_DIAGNOSTICS
+    name: 本機 pytest 診斷
+    visibility_scope: GLOBAL
+    department: RD
+    execution_mode: LOCAL_DAEMON_CLI
+    trigger_description: 需要在使用者本機專案執行 pytest 並取得失敗摘要時使用。
+    required_tool_namespaces: [local_daemon_cli]
+    bound_role_codes: [SE]
+    cli_config:
+      action_tier: READ
+      command_template: pytest {{test_target}} -q --tb=short
+    sop_markdown: |
+      1. `test_target` 只能是使用者已授權工作目錄內的路徑或測試節點。
+      2. 命令模板為 `pytest {{test_target}} -q --tb=short`。
+      3. 只回報失敗用例與退出碼，不改寫測試來讓結果變綠。
