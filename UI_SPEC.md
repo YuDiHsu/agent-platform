@@ -256,3 +256,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
      - 🟧 Layer 3: Agent-Exclusive Rules (Isolated)
      - 🟩 Layer 4: Stage-1 Compact Skill Manifests
    - Allows the creator to send a test message right inside Studio to verify the custom agent's JSON output before saving.
+   - **Note on System-Hidden Assets (`is_visible_to_user = false`)**: In the user-facing Studio and Live Prompt Onion Inspector, system-internal hidden Rules, Skills, and MCP Tools (`is_visible_to_user = false`) are completely omitted from the preview and selectors so end-users cannot inspect or disable them.
+3. **Personal Agent Roster & Memory Controls**:
+   - Users can toggle any agent on/off (`is_enabled`), edit, or delete it within their isolated workspace, click **`[🔄 還原系統預設 Agent]`** (`POST /api/v1/agents/presets/reset`) to restore any of the 7 default presets, and click **`[🧹 清理記憶]`** to clear memories by role, session, or personal scope.
+
+### 3.4 Screen 4: Admin Governance Console & Generative BI Dashboard (`/admin/page.tsx` - Tickets `11` & `12`)
+Visible only when `currentUser.is_admin === true` via the **`[🛡️ 系統管理後台]`** nav rail item:
+1. **Tab 1 — Monitor Dashboard & Ask Dashboard AI (`/admin/dashboard`)**:
+   - **AI Generative BI Search Bar (`AskDashboardAI.tsx`)**: Admin types natural language (e.g., *"比較使用者王小明上週與這週的 Token 花費與各角色呼叫次數"*). Backend executes a safe read-only query (`SET TRANSACTION READ ONLY` + 5s timeout) and returns `AdminBIChartResponse` (`insight_markdown`, `chart_type`: `'GROUPED_BAR' | 'LINE' | 'PIE' | 'STACKED_BAR' | 'DATA_TABLE'`, `x_axis_key`, `series`, `dataset`), dynamically rendering an interactive chart card with **`[📌 釘選至儀表板]`** and **`[⬇️ 匯出 CSV]`**.
+   - **5 Built-in Default Statistical Reports**:
+     1. **Live Concurrency & Health KPI Ribbon**: Concurrent online users, active `IN_PROGRESS` tickets, `WAITING_HITL` count, today's total tokens, and quota-warning user count.
+     2. **Dept & User Token Consumption & Quota Leaderboard**: Day/Week/Month trend line + department/user bar chart with quota `%` progress bars and inline quick-adjust quota buttons.
+     3. **Agent Role Utilization & Latency Breakdown**: Dispatch counts, average completion duration, token share, and `CIRCUIT_BROKEN` rate across `ORCH`, `SA`, `ARCH`, `PM`, `FIN`, `SE`, `CEO`, and custom roles.
+     4. **Skill / Tool / MCP Telemetry & Timeout Leaderboard**: Call volume, average latency (`ms`), and timeout/error rates per Tool Adapter and CLI Skill.
+     5. **HITL Security & Approval Funnel**: Total intercepted `COMMIT` actions and breakdown of `APPROVED`, `MODIFIED`, and `REJECTED` decisions.
+2. **Tab 2 — User Account Lifecycle & Token Quota Control (`/admin/users`)**:
+   - Create, edit (department, title, `is_admin`, `max_concurrent_tickets`), suspend/unsuspend (immediately revoking active sessions), and delete user accounts (cascading private data while preserving shared `DEPARTMENT`/`GLOBAL` assets, with guardrails preventing self-deletion or deleting the last admin).
+   - Set `token_quota_limit` and 1-click reset consumed tokens. When an admin increases quota for a user paused in `PAUSED_QUOTA_EXCEEDED`, the user's existing chat session displays **`[▶️ 額度已開通，繼續執行原對話]`** and resumes seamlessly from the paused LangGraph checkpoint.
+3. **Tab 3 — Public & System-Hidden (`is_visible_to_user = false`) Asset Studio (`/admin/assets`)**:
+   - Manage and hot-update all `GLOBAL` / `DEPARTMENT` and hidden `is_visible_to_user = false` Rules, Skills, dynamic Remote MCP / HTTP Tool Adapters, and the 7 Default Preset Agent Templates, with an unredacted Admin Prompt Inspector & Test Sandbox.
+4. **Tab 4 — Publish Approval Queue, Live Operations Kill-Switch & Security Audit Explorer (`/admin/operations` & `/admin/audit`)**:
+   - Approve or reject employee-submitted `PENDING_REVIEW` agents, rules, and skills.
+   - Force-terminate stuck `IN_PROGRESS` tickets, pause/resume 24/7 Heartbeat routines, manage `ORG_GLOBAL` / `DEPARTMENT_SHARED` memories, inspect SGLang/Embedding/DB/Redis/Sandbox health, and search/export `security_audit_logs` and `cli_execution_logs`.

@@ -2,7 +2,7 @@
 
 **What to build:** 建立 24/7 全天候非同步工單執行器與定時常駐排程（Celery Beat + Redis），並提供給進階工程師選配的輕量級本機守護進程（Local MCP Daemon）。背景 Worker 使用 PostgreSQL `SELECT ... FOR UPDATE SKIP LOCKED` 實現 Paperclip 風格的原子工單鎖定，避免多 Worker 重複執行同一張工單；支援每日定時自動觸發例行任務（如每日 08:30 自動分類未讀信件與發送 Teams 晨間摘要）。當使用者關閉瀏覽器分頁時，伺服器端 MCP 工具仍可於背景正常運作；若背景工單需要讀取未連線的瀏覽器本機掛載，系統會優雅降級並通知使用者，或當使用者終端已啟動選配的 `Local MCP Daemon` 時，無縫由 Daemon 接手本機檔案讀寫（`CLIENT_FS_READ` / `CLIENT_FS_WRITE`）與本機 CLI/Git 診斷指令（`DAEMON_EXEC_CLI`，如 `SKILL_SE_PYTEST_AND_GIT_DIAGNOSTICS`）。
 
-**Blocked by:** 06: 企業內部 MCP 連接器（O365、Teams、Slack、通用信箱）與統一工具匯流排, 07: 瀏覽器本機資料夾反向 RPC 橋接、記憶體文件解析與紅綠 Diff 寫入確認, 09: 雙目標參數化防注入 CLI 執行器、Rootless Docker 沙盒與即時 ANSI 終端機卡片
+**Blocked by:** 06: 可插拔 BaseToolAdapter 擴充接口、四大企業 MCP 連接器與高併發低延遲工具匯流排, 07: 跨 Worker Redis Pub/Sub 瀏覽器本機反向 RPC 橋接、記憶體文件解析與紅綠 Diff 寫入, 09: 雙目標參數化防注入 CLI 執行器、併發限流 Rootless Docker 沙盒與即時 ANSI 終端機卡片
 
 **Status:** ready-for-agent
 
