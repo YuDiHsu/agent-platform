@@ -4,6 +4,7 @@ import math
 
 import pytest
 
+from app.core.config import settings
 from app.db.catalog import binding_map, read_builtin_catalog
 from app.db.seed_runner import SeedRunner
 from app.db.session import get_session_factory
@@ -45,7 +46,7 @@ async def test_seed_loads_roles_rules_skills_and_can_run_twice() -> None:
     assert roles["ARCH"].reports_to_code == "PM"
     assert roles["SE"].reports_to_code == "ARCH"
     for role in catalog.roles:
-        assert len(role.embedding) == 32
+        assert len(role.embedding) == settings.EMBEDDING_DIMENSION
         assert _unit(role.embedding) == pytest.approx(1.0)
 
     rules = {rule.code: rule for rule in catalog.rules}
@@ -72,7 +73,7 @@ async def test_seed_loads_roles_rules_skills_and_can_run_twice() -> None:
     assert skills["SKILL_SE_PYTEST_AND_GIT_DIAGNOSTICS"].execution_mode == "LOCAL_DAEMON_CLI"
     assert skills["SKILL_COMMON_MEETING_ACTION_ITEMS"].execution_mode == "PROMPT_ONLY"
     for skill in catalog.skills:
-        assert len(skill.embedding) == 32
+        assert len(skill.embedding) == settings.EMBEDDING_DIMENSION
         assert _unit(skill.embedding) == pytest.approx(1.0)
 
     skill_bindings = binding_map(catalog.skill_bindings, by_right=True)

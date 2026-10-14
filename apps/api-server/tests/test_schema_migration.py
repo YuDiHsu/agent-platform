@@ -77,14 +77,15 @@ async def test_migration_creates_tables_extensions_and_hnsw_indexes() -> None:
         uuid_ready = generated is not None
     assert uuid_ready
     assert constraint is not None
-    assert "bound_local_mount_id IS NULL" in constraint
-    assert "visibility_scope = 'PRIVATE'" in constraint
+    normalized = constraint.replace("::text", "")
+    assert "bound_local_mount_id IS NULL" in normalized
+    assert "visibility_scope" in normalized and "PRIVATE" in normalized
     index_defs = {name: definition for name, definition in index_rows}
     for index_name in HNSW_INDEXES:
         definition = index_defs[index_name].lower()
         assert "hnsw" in definition
         assert "vector_cosine_ops" in definition
-        assert {row[2] for row in vector_types} == {"vector(32)"}
+        assert {row[2] for row in vector_types} == {f"vector({settings.EMBEDDING_DIMENSION})"}
         await session.commit()
 
 

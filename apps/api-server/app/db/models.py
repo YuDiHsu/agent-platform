@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    String,
     Text,
     UniqueConstraint,
     func,
@@ -47,11 +48,11 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    department: Mapped[str] = mapped_column(Text, nullable=False)
-    job_title: Mapped[str | None] = mapped_column(Text)
-    sso_subject_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    department: Mapped[str] = mapped_column(String(100), nullable=False)
+    job_title: Mapped[str | None] = mapped_column(String(100))
+    sso_subject_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     is_admin: Mapped[bool | None] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime | None] = _created_at()
 
@@ -65,15 +66,15 @@ class LocalWorkspaceMount(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    mount_alias: Mapped[str] = mapped_column(Text, nullable=False)
+    mount_alias: Mapped[str] = mapped_column(String(100), nullable=False)
     provider_type: Mapped[str] = mapped_column(
-        Text,
+        String(30),
         nullable=False,
         server_default=text("'BROWSER_FS_API'"),
     )
-    browser_handle_key: Mapped[str | None] = mapped_column(Text)
+    browser_handle_key: Mapped[str | None] = mapped_column(String(255))
     permission_mode: Mapped[str] = mapped_column(
-        Text,
+        String(30),
         nullable=False,
         server_default=text("'READ_WRITE_WITH_CONFIRM'"),
     )
@@ -111,9 +112,9 @@ class AgentRole(Base):
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    department: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'GLOBAL'"))
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    department: Mapped[str] = mapped_column(String(100), nullable=False, server_default=text("'GLOBAL'"))
     reports_to_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("agent_roles.id", ondelete="SET NULL"),
@@ -123,12 +124,12 @@ class AgentRole(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
     )
     visibility_scope: Mapped[str] = mapped_column(
-        Text,
+        String(20),
         nullable=False,
         server_default=text("'PRIVATE'"),
     )
     approval_status: Mapped[str] = mapped_column(
-        Text,
+        String(20),
         nullable=False,
         server_default=text("'APPROVED'"),
     )
@@ -164,21 +165,21 @@ class RuleRegistry(Base):
     __tablename__ = "rules_registry"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
     scope_type: Mapped[str] = mapped_column(
-        Text,
+        String(30),
         nullable=False,
         server_default=text("'ROLE_EXCLUSIVE'"),
     )
-    department: Mapped[str | None] = mapped_column(Text)
+    department: Mapped[str | None] = mapped_column(String(100))
     creator_user_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
     )
     priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("100"))
     rule_content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
-    glob_trigger: Mapped[str | None] = mapped_column(Text)
+    glob_trigger: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text("true"))
     created_at: Mapped[datetime | None] = _created_at()
 
@@ -216,23 +217,23 @@ class SkillRegistry(Base):
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
     visibility_scope: Mapped[str] = mapped_column(
-        Text,
+        String(30),
         nullable=False,
         server_default=text("'GLOBAL'"),
     )
-    department: Mapped[str | None] = mapped_column(Text)
+    department: Mapped[str | None] = mapped_column(String(100))
     creator_user_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
     )
-    trigger_description: Mapped[str] = mapped_column(Text, nullable=False)
+    trigger_description: Mapped[str] = mapped_column(String(300), nullable=False)
     trigger_embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
     sop_markdown: Mapped[str] = mapped_column(Text, nullable=False)
     execution_mode: Mapped[str] = mapped_column(
-        Text,
+        String(30),
         nullable=False,
         server_default=text("'PROMPT_ONLY'"),
     )
@@ -272,9 +273,9 @@ class SharedArtifact(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     session_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    producer_role_code: Mapped[str] = mapped_column(Text, nullable=False)
-    artifact_type: Mapped[str] = mapped_column(Text, nullable=False)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
+    producer_role_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
     summary_200_words: Mapped[str] = mapped_column(Text, nullable=False)
     content_body: Mapped[str] = mapped_column(Text, nullable=False)
     structured_metadata: Mapped[dict[str, Any] | None] = mapped_column(
@@ -300,17 +301,17 @@ class TaskTicket(Base):
         nullable=False,
     )
     assigned_role_code: Mapped[str] = mapped_column(
-        Text,
+        String(64),
         ForeignKey("agent_roles.code"),
         nullable=False,
     )
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'PENDING'"))
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'PENDING'"))
     hop_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     max_hops: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("8"))
     token_budget: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("16000"))
     tokens_consumed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    locked_by_worker: Mapped[str | None] = mapped_column(Text)
+    locked_by_worker: Mapped[str | None] = mapped_column(String(100))
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     goal_ancestry: Mapped[list[Any]] = mapped_column(
         JSONB,
@@ -347,13 +348,13 @@ class HitlApprovalRequest(Base):
         ForeignKey("users.id"),
         nullable=False,
     )
-    executing_role_code: Mapped[str] = mapped_column(Text, nullable=False)
-    tool_name: Mapped[str] = mapped_column(Text, nullable=False)
-    execution_target: Mapped[str] = mapped_column(Text, nullable=False)
-    action_tier: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'COMMIT'"))
-    preview_title: Mapped[str] = mapped_column(Text, nullable=False)
+    executing_role_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    execution_target: Mapped[str] = mapped_column(String(30), nullable=False)
+    action_tier: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'COMMIT'"))
+    preview_title: Mapped[str] = mapped_column(String(255), nullable=False)
     proposed_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'PENDING'"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'PENDING'"))
     user_modified_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime | None] = _created_at()
@@ -373,15 +374,15 @@ class CliExecutionLog(Base):
         ForeignKey("users.id"),
         nullable=False,
     )
-    executing_role_code: Mapped[str] = mapped_column(Text, nullable=False)
+    executing_role_code: Mapped[str] = mapped_column(String(64), nullable=False)
     skill_code: Mapped[str] = mapped_column(
-        Text,
+        String(64),
         ForeignKey("skills_registry.code"),
         nullable=False,
     )
-    execution_target: Mapped[str] = mapped_column(Text, nullable=False)
+    execution_target: Mapped[str] = mapped_column(String(30), nullable=False)
     rendered_command: Mapped[str] = mapped_column(Text, nullable=False)
-    working_directory: Mapped[str | None] = mapped_column(Text)
+    working_directory: Mapped[str | None] = mapped_column(String(255))
     exit_code: Mapped[int | None] = mapped_column(Integer)
     stdout_preview: Mapped[str | None] = mapped_column(Text)
     stderr_preview: Mapped[str | None] = mapped_column(Text)
@@ -406,7 +407,7 @@ class UserConnectorToken(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
     encrypted_access_token: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     encrypted_refresh_token: Mapped[bytes | None] = mapped_column(LargeBinary)
     scopes: Mapped[list[Any]] = mapped_column(
@@ -433,14 +434,14 @@ class AgentMemory(Base):
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    memory_scope: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_scope: Mapped[str] = mapped_column(String(30), nullable=False)
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
     )
-    department: Mapped[str | None] = mapped_column(Text)
+    department: Mapped[str | None] = mapped_column(String(100))
     session_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
-    source_reference: Mapped[str | None] = mapped_column(Text)
+    source_reference: Mapped[str | None] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

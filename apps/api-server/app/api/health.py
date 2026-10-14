@@ -3,7 +3,7 @@
 import logging
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy import func, select, text
@@ -35,7 +35,7 @@ class HealthResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
+async def health(response: Response) -> HealthResponse:
     postgres: Literal["ok", "error"] = "error"
     redis_status: Literal["ok", "error"] = "error"
     seed: SeedCounts | None = None
@@ -65,4 +65,6 @@ async def health() -> HealthResponse:
         and seed.skills == EXPECTED_SKILLS
     )
     status: Literal["ok", "degraded"] = "ok" if postgres == "ok" and redis_status == "ok" and seeded else "degraded"
+    if status != "ok":
+        response.status_code = 503
     return HealthResponse(status=status, postgres=postgres, redis=redis_status, seed=seed)
