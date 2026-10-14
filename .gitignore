@@ -1,0 +1,79 @@
+# ==============================================================================
+# Enterprise Multi-Agent Platform - .gitignore
+# ==============================================================================
+
+# Environment & Secrets (Zero-Trust Policy)
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.key
+*.crt
+id_rsa*
+
+# Python / FastAPI / uv / Pytest
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+celerybeat-schedule
+celerybeat.pid
+
+# Node.js / Next.js 15 / Web Portal
+node_modules/
+.next/
+out/
+.turbo/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# CodeGraph Local Index & Daemon Logs
+.codegraph/
+
+# Impeccable Local Machine Config & Transient State
+.impeccable/config.local.json
+.impeccable/live/state.json
+.impeccable/*.tmp
+
+# OS / Editor / AI IDE Files
+.cursor/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
