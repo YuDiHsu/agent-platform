@@ -2,7 +2,7 @@
 
 - **Document ID**: `EAMP-MASTER-SPEC-2026-V3.0`
 - **Target Coding Agent**: **Gemini 4 Argon (`gemini-4-argon`)** (via Cursor, Google Antigravity, OpenCode, or Direct API)
-- **Target On-Premise Runtime LLM**: Google **Gemma 4** (served via **SGLang** or **vLLM**) + **google/embeddinggemma-2** (768-d)
+- **Target On-Premise Runtime LLM**: Google **Gemma 4** (served via **SGLang** or **vLLM**) + **Configurable Local OpenAI-Compatible Embedding Model** (`EMBEDDING_MODEL_NAME` e.g. `BAAI/bge-m3` & `EMBEDDING_DIMENSION` e.g. `1024` or `768`, per `ADR-0001`)
 - **License Policy**: **100% Commercial-Safe Open Source ONLY** (MIT, Apache-2.0, BSD-3, PostgreSQL License). Strictly NO AGPLv3, GPL, SSPL, or Fair-code (Dify/n8n) dependencies in core runtime.
 
 ---
@@ -33,7 +33,7 @@ Every module, database table, API endpoint, and acceptance test case in this spe
 | **REQ-006** | **Enterprise Connectors** | Integrate Microsoft Office 365 (Outlook Mail, Calendar, OneDrive), Microsoft Teams, Slack, and generic IMAP/SMTP Email via standardized internal MCP servers. | `MOD-MCP-GW`, `MOD-CONN` | `user_connector_tokens` | `TC-M2-01` |
 | **REQ-007** | **HITL Security Gate** | Classify all tool/CLI calls into `READ`, `DRAFT`, and `COMMIT`. Automatically intercept `COMMIT` actions (sending mail, posting messages, writing local files, mutating CLI) for user approval. | `MOD-HITL`, `MOD-ORCH` | `hitl_approval_requests` | `TC-M2-02` |
 | **REQ-008** | **On-Premise Gemma 4 Optimization** | Guarantee 99.9% valid JSON tool calls and handoffs on local Gemma 4 using SGLang FSM Constrained Decoding, RadixAttention KV-cache sharing, and Artifact Pointers (Claim-Check pattern). | `MOD-LLM-GW`, `MOD-ORCH` | `shared_artifacts` | `TC-M1-03` |
-| **REQ-009** | **Dynamic Role & Tool RAG** | Use local `google/embeddinggemma-2` + `pgvector` to dynamically inject only Top-K relevant roles, tools, and skills per turn. | `MOD-RAG`, `MOD-ORCH` | `agent_roles`, `skills_registry` | `TC-M2-03` |
+| **REQ-009** | **Dynamic Role & Tool RAG** | Use a configurable local OpenAI-compatible Embedding model (`EMBEDDING_MODEL_NAME` e.g. `BAAI/bge-m3`, `EMBEDDING_DIMENSION`) + `pgvector` to dynamically inject only Top-K relevant roles, tools, and skills per turn. | `MOD-RAG`, `MOD-ORCH` | `agent_roles`, `skills_registry` | `TC-M2-03` |
 | **REQ-010** | **AionUi Split Workspace** | Provide a Web PWA featuring Multi-Agent Chat, Interactive Org Chart / Ticket DAG viewer, and a right-hand Artifact Preview, Diff Confirmation & ANSI Terminal viewer. | `MOD-WEB-UI` | `shared_artifacts` | `TC-M3-03` |
 | **REQ-011** | **24/7 Background Heartbeats** | Support scheduled recurring routines (e.g., daily 08:30 inbox triage & Teams morning brief) running asynchronously via Celery Beat + Redis. | `MOD-WORKER` | `tasks_tickets` | `TC-M4-01` |
 | **REQ-012** | **Enterprise Zero-Trust & RBAC** | Enforce On-Behalf-Of (OBO) per-user OAuth2 tokens, AES-256-GCM encryption, strict tenant/user memory isolation, and local path traversal/denylist protections. | `MOD-SEC` | `users`, `user_connector_tokens`, `agent_memories` | `TC-M4-03` |
@@ -79,7 +79,7 @@ flowchart TB
 
         subgraph Data_And_AI ["本地算力與儲存底座 (On-Premise AI & Storage)"]
             SGLANG["SGLang / vLLM Cluster\n(Gemma 4 + FSM JSON Constrained Decoding)"]
-            EMBED["Embedding Service\n(google/embeddinggemma-2)"]
+            EMBED["Embedding Service\n(Configurable e.g. BAAI/bge-m3)"]
             PG[("PostgreSQL 16 + pgvector\n(13 Tables: Roles, Rules, Skills, Tickets, Vault)")]
         end
 
@@ -115,7 +115,7 @@ flowchart TB
 | Layer | Package / Technology | License | Role in Platform |
 | :--- | :--- | :--- | :--- |
 | **LLM Serving** | `SGLang` (or `vLLM`) + `Gemma 4` | Apache-2.0 | Local inference with RadixAttention KV cache & FSM JSON schema enforcement. |
-| **Embeddings** | `google/embeddinggemma-2` | Apache-2.0 | Local 768-d vector embeddings for Role routing, Tool RAG, Skill matching, and Memory. |
+| **Embeddings** | Configurable OpenAI-compatible model (e.g., `BAAI/bge-m3`) | MIT / Apache-2.0 | Local vector embeddings (`EMBEDDING_DIMENSION`, e.g., 1024-d or 768-d) for Role routing, Tool RAG, Skill matching, and Memory. |
 | **Orchestration** | `langgraph`, `langgraph-checkpoint-postgres`, `pydantic` v2 | MIT | Stateful DAG orchestration, HITL checkpoint interrupts, and strict data contracts. |
 | **Backend API** | `FastAPI`, `uvicorn`, `websockets`, `SQLAlchemy` 2.0, `alembic` | MIT | Async REST, SSE streaming, WebSocket Reverse RPC, and async ORM. |
 | **CLI Sandbox & Docs** | `docker` (Python SDK), `markitdown`, `jsonschema` | Apache-2.0 / MIT | Ephemeral rootless container CLI execution and stateless `.docx/.xlsx/.pdf` parsing. |
@@ -259,7 +259,7 @@ CREATE TABLE agent_roles (
     approval_status VARCHAR(20) NOT NULL DEFAULT 'APPROVED', -- 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED'
     system_prompt TEXT NOT NULL,
     routing_description TEXT NOT NULL,
-    routing_embedding VECTOR(768),
+    routing_embedding VECTOR(768), -- Dynamic dimension via settings.EMBEDDING_DIMENSION (e.g., 1024 for BAAI/bge-m3 or 768) in SQLAlchemy/Alembic
     output_json_schema JSONB NOT NULL,
     allowed_tool_namespaces JSONB NOT NULL DEFAULT '[]',
     bound_local_mount_id UUID REFERENCES local_workspace_mounts(id) ON DELETE SET NULL,
@@ -308,7 +308,7 @@ CREATE TABLE skills_registry (
     department VARCHAR(100),
     creator_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     trigger_description VARCHAR(300) NOT NULL,
-    trigger_embedding VECTOR(768),
+    trigger_embedding VECTOR(768), -- Dynamic dimension via settings.EMBEDDING_DIMENSION (e.g., 1024 or 768) in SQLAlchemy/Alembic
     sop_markdown TEXT NOT NULL,
     execution_mode VARCHAR(30) NOT NULL DEFAULT 'PROMPT_ONLY', -- 'PROMPT_ONLY' | 'SERVER_SANDBOX_CLI' | 'LOCAL_DAEMON_CLI' | 'MCP_TOOL_COMBO'
     cli_config JSONB DEFAULT NULL,
@@ -426,7 +426,7 @@ CREATE TABLE agent_memories (
     session_id UUID,
     source_reference VARCHAR(255),
     content TEXT NOT NULL,
-    embedding VECTOR(768) NOT NULL,
+    embedding VECTOR(768) NOT NULL, -- Dynamic dimension via settings.EMBEDDING_DIMENSION (e.g., 1024 or 768) in SQLAlchemy/Alembic
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -999,11 +999,11 @@ Execute the following 5 Milestones in order. Adjust `gemini-4-argon`'s `thinking
 - **`M1-T1` `[建議思考等級: MEDIUM]` (`max_output_tokens: 65536`)** — **Monorepo & Database Models**:
   - Scaffold directory tree, `docker-compose.yml` (`pgvector/pgvector:pg16`, `redis:7-alpine`), `app/core/config.py`, `app/db/models.py` (all 13 tables in exact FK order from Section 5), and Alembic migration `0001_unified_schema.py`.
 - **`M1-T2` `[建議思考等級: MEDIUM]` (`max_output_tokens: 65536`)** — **LLM Clients & Seed Runner**:
-  - Implement `gemma_client.py` (SGLang FSM JSON Schema client), `embedding_client.py` (`google/embeddinggemma-2`), and `seed_runner.py` to load `seed_roles.yaml`, `seed_rules.yaml`, and `seed_skills.yaml`.
+  - Implement `gemma_client.py` (SGLang FSM JSON Schema client), `embedding_client.py` (configurable OpenAI-compatible `/v1/embeddings` client via `EMBEDDING_MODEL_NAME` e.g. `BAAI/bge-m3` and `EMBEDDING_DIMENSION`), and `seed_runner.py` to load `seed_roles.yaml`, `seed_rules.yaml`, and `seed_skills.yaml`.
 - **`M1-T3` `[建議思考等級: HIGH]` (`max_output_tokens: 131072`)** — **LangGraph DAG Supervisor, Claim-Check Artifact Manager & Circuit Breaker**:
   - Implement `state.py`, `artifact_manager.py`, `role_runner.py`, and `supervisor_graph.py`. Must support topological execution of `dag_steps`, `AsyncPostgresSaver` checkpointing, Claim-Check 200-word pointer passing, and hard stop at `max_hops = 8`.
 - **Milestone 1 Acceptance Tests (`[建議思考等級: MEDIUM]`)**:
-  - `TC-M1-01`: Verify all 7 roles, 5 rules, and 4 skills seed cleanly with 768-d embeddings.
+  - `TC-M1-01`: Verify all 7 roles, 5 rules, and 4 skills seed cleanly with `settings.EMBEDDING_DIMENSION`-d embeddings.
   - `TC-M1-02`: Run multi-role prompt (`SA` -> `ARCH` + `FIN` -> `PM`), verify DAG order, verify `shared_artifacts` storage, and verify `hop_count <= 8`.
   - `TC-M1-03`: Verify 100% valid JSON output across 50 consecutive Gemma 4 SGLang calls.
 

@@ -2,7 +2,7 @@
 # Enterprise Multi-Agent Platform - Built-in Role Registry Seed File (v2.0)
 # Target Path: packages/builtin-roles/seed_roles.yaml
 # Target Model: On-Premise Google Gemma 4 (via SGLang / vLLM Guided JSON)
-# Embedding Model: google/embeddinggemma-2 (768 dimensions)
+# Embedding Model: Configurable OpenAI-compatible model via EMBEDDING_MODEL_NAME & EMBEDDING_DIMENSION (e.g., BAAI/bge-m3)
 # License: MIT / Apache-2.0 Commercial Safe
 # ==============================================================================
 

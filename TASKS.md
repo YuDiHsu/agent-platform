@@ -1,9 +1,9 @@
 # Enterprise Multi-Agent Platform - Execution Task Tracker (`TASKS.md`)
 
-- **Blueprint Reference**: `MASTER_SPEC.md` (`EAMP-MASTER-SPEC-2026-V3.0` - **READ ONLY**)
+- **Blueprint Reference**: `MASTER_SPEC.md` (`EAMP-MASTER-SPEC-2026-V3.0` - Living Single Source of Truth)
 - **Target Model**: `gemini-4-argon`
 - **Agent Execution Protocol**:
-  1. Always read `MASTER_SPEC.md` first for schemas, code contracts, and architecture rules (**DO NOT modify `MASTER_SPEC.md`**).
+  1. Always read `MASTER_SPEC.md` first for schemas, code contracts, and architecture rules (update `MASTER_SPEC.md` during planning/spec changes so it stays in sync; implementer agents must not unilaterally drop requirements during coding).
   2. Pick the next uncompleted task (`- [ ]`) in sequential order (`TASK-01` -> `TASK-28`).
   3. Check the task's **`[THINKING: MEDIUM]`** or **`[THINKING: HIGH]`** badge before generating code.
   4. Implement the exact **Target Files** listed for that task without any `# TODO` or placeholder stubs.
@@ -44,11 +44,11 @@
     - `apps/api-server/alembic/versions/0001_unified_schema.py`
   - **Verification Command**: `cd apps/api-server && alembic upgrade head`
 
-- [ ] **TASK-03** `[THINKING: MEDIUM]` — **Implement SGLang Gemma 4 Guided-JSON Client & EmbeddingGemma-2 Client**
-  - **Implements**: `REQ-008`, `REQ-009` (Section 6.1 of `MASTER_SPEC.md`)
+- [ ] **TASK-03** `[THINKING: MEDIUM]` — **Implement SGLang Gemma 4 Guided-JSON Client & Configurable Embedding Client**
+  - **Implements**: `REQ-008`, `REQ-009` (Section 6.1 of `MASTER_SPEC.md` & `ADR-0001`)
   - **Target Files**:
     - `apps/api-server/app/llm/gemma_client.py` (`GemmaSGLangClient.generate_structured` with `json_schema` strict mode)
-    - `apps/api-server/app/llm/embedding_client.py` (`EmbeddingGemmaClient.embed_text` & `embed_batch` returning 768-d vectors)
+    - `apps/api-server/app/llm/embedding_client.py` (Configurable OpenAI-compatible `embed_text` & `embed_batch` returning `settings.EMBEDDING_DIMENSION`-d vectors, e.g., `BAAI/bge-m3`)
   - **Verification Command**: `cd apps/api-server && pytest tests/test_llm_clients.py -v`
 
 - [ ] **TASK-04** `[THINKING: MEDIUM]` — **Create Built-in Seed YAML Files & Idempotent Database Seeder**
@@ -57,7 +57,7 @@
     - `packages/builtin-roles/seed_roles.yaml` (7 core roles: `ORCH`, `CEO`, `PM`, `FIN`, `SA`, `ARCH`, `SE`)
     - `packages/builtin-skills-rules/seed_rules.yaml` (Global mandatory & role-exclusive rules)
     - `packages/builtin-skills-rules/seed_skills.yaml` (Common & role-specific CLI skills)
-    - `apps/api-server/app/db/seed_runner.py` (Populates `agent_roles`, `rules_registry`, `agent_role_rules`, `skills_registry`, `agent_role_skills`, and computes 768-d embeddings)
+    - `apps/api-server/app/db/seed_runner.py` (Populates `agent_roles`, `rules_registry`, `agent_role_rules`, `skills_registry`, `agent_role_skills`, and computes `settings.EMBEDDING_DIMENSION`-d embeddings)
   - **Verification Command**: `cd apps/api-server && python -m app.db.seed_runner`
 
 - [ ] **TASK-05** `[THINKING: MEDIUM]` — **Implement LangGraph State Contracts & Claim-Check Artifact Manager**

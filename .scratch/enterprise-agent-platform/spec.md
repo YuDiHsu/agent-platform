@@ -4,11 +4,11 @@
 
 ## Canonical Specification
 
-- **Master Specification (Read-Only Source of Truth)**: [`MASTER_SPEC.md`](../../MASTER_SPEC.md) (`EAMP-MASTER-SPEC-2026-V3.0`)
+- **Master Specification (Living Single Source of Truth)**: [`MASTER_SPEC.md`](../../MASTER_SPEC.md) (`EAMP-MASTER-SPEC-2026-V3.0`)
 - **Frontend UI/UX & Interactive State Specification**: [`UI_SPEC.md`](../../UI_SPEC.md) (`EAMP-UI-SPEC-2026-V3.0`)
 - **Product & Accessibility Context**: [`PRODUCT.md`](../../PRODUCT.md)
-- **Architecture Decision Overrides (`docs/adr/`)**:
-  - [`0001-configurable-embedding-model-and-dimension.md`](../../docs/adr/0001-configurable-embedding-model-and-dimension.md) — Overrides `MASTER_SPEC.md`'s hardcoded `google/embeddinggemma-2 (768-d)` with a config-driven OpenAI-compatible Embedding client and configurable `EMBEDDING_DIMENSION` (supporting `BAAI/bge-m3` et al.).
+- **Architecture Decision Records (`docs/adr/`)**:
+  - [`0001-configurable-embedding-model-and-dimension.md`](../../docs/adr/0001-configurable-embedding-model-and-dimension.md) — Config-driven OpenAI-compatible Embedding client (`EMBEDDING_MODEL_NAME` e.g. `BAAI/bge-m3`) and dynamic `EMBEDDING_DIMENSION` (synced into `MASTER_SPEC.md`).
 - **Built-in Role Seed Reference**: [`packages/builtin-roles/seed_roles.yaml`](../../packages/builtin-roles/seed_roles.yaml)
 - **Legacy Layer Checklist**: [`TASKS.md`](../../TASKS.md)
 
