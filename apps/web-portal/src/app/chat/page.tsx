@@ -84,7 +84,7 @@ export default function ChatPage() {
         {!signedIn ? (
           <form className="signin" onSubmit={(event) => void onLogin(event)}>
             <h1>回到你的工作區</h1>
-            <p className="note">用公司信箱進入。關閉瀏覽器後，下次登入會還原上次的對話、工單與產出物。</p>
+            <p className="lede">用公司信箱進入。關閉瀏覽器之後，下次登入會還原上次的對話、工單與產出物。</p>
             <label>
               信箱
               <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
@@ -130,6 +130,7 @@ export default function ChatPage() {
             </label>
             <button
               type="button"
+              className="ghost"
               onClick={() => {
                 resetConversation();
                 setError(null);

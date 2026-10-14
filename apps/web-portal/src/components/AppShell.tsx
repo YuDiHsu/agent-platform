@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, MessageSquare, Moon, Sun } from "lucide-react";
+import { Building2, Menu, MessageSquare, Moon, PanelRight, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -83,23 +83,33 @@ export function AppShell({ children }: { children: ReactNode }) {
         跳至主要內容
       </a>
       <header className="topbar">
-        <button type="button" className="icon-button mobile-only" onClick={() => setNavOpen(true)}>
-          開啟導覽
+        <button type="button" className="icon-button mobile-only" aria-label="開啟導覽" onClick={() => setNavOpen(true)}>
+          <Menu size={18} aria-hidden="true" />
         </button>
-        <Link className="brand" href="/chat">
-          Enterprise Agent Hub
-        </Link>
-        <p className="session-title">{sessionTitle}</p>
+        <div className="brand-lockup">
+          <span className="mark" aria-hidden="true">
+            E
+          </span>
+          <div className="brand-copy">
+            <Link className="brand" href="/chat">
+              Enterprise Agent Hub
+            </Link>
+            <p className="session-title">{sessionTitle}</p>
+          </div>
+        </div>
         <div className="top-meta">
-          <span className="quiet">本機掛載：0 已連線</span>
-          <span>待審批 {hitlCount}</span>
-          <button type="button" className="icon-button" onClick={toggleTheme}>
+          <span className="chip quiet">
+            <span className="dot" aria-hidden="true" />
+            本機掛載 0
+          </span>
+          <span className="chip">待審批 {hitlCount}</span>
+          <button type="button" className="ghost" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             {theme === "dark" ? "淺色" : "深色"}
           </button>
           {isChat ? (
-            <button type="button" className="icon-button mobile-only" onClick={() => setBenchOpen(true)}>
-              開啟工作台
+            <button type="button" className="icon-button mobile-only" aria-label="開啟工作台" onClick={() => setBenchOpen(true)}>
+              <PanelRight size={18} aria-hidden="true" />
             </button>
           ) : null}
         </div>
@@ -118,7 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <>
           <button type="button" className="drawer-backdrop" aria-label="關閉導覽" onClick={() => setNavOpen(false)} />
           <div className="sheet left" role="dialog" aria-modal="true" aria-label="導覽">
-            <button type="button" onClick={() => setNavOpen(false)} autoFocus>
+            <button type="button" className="ghost" onClick={() => setNavOpen(false)} autoFocus>
               關閉
             </button>
             {nav}
@@ -129,7 +139,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <>
           <button type="button" className="drawer-backdrop" aria-label="關閉工作台" onClick={() => setBenchOpen(false)} />
           <div className="sheet bottom" role="dialog" aria-modal="true" aria-label="工作台">
-            <button type="button" onClick={() => setBenchOpen(false)} autoFocus>
+            <button type="button" className="ghost" onClick={() => setBenchOpen(false)} autoFocus>
               關閉工作台
             </button>
             <ArtifactWorkbench />

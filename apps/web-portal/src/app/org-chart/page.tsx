@@ -153,7 +153,7 @@ export default function OrgChartPage() {
         <>
           <button type="button" className="drawer-backdrop" aria-label="關閉角色抽屜" onClick={() => setSelected(null)} />
           <aside className="sheet right" role="dialog" aria-modal="true" aria-labelledby="role-drawer-title">
-            <button type="button" onClick={() => setSelected(null)} autoFocus>
+            <button type="button" className="ghost" onClick={() => setSelected(null)} autoFocus>
               關閉
             </button>
             <h2 id="role-drawer-title">{selectedRole.name}</h2>

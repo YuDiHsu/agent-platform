@@ -20,13 +20,13 @@ function HitlCard({ request }: { request: HitlRequestUI }) {
       </p>
       <pre>{JSON.stringify(request.proposed_payload, null, 2)}</pre>
       <div className="hitl-actions">
-        <button type="button" disabled>
+        <button type="button" className="quiet-action" disabled>
           核准執行
         </button>
-        <button type="button" disabled>
+        <button type="button" className="quiet-action" disabled>
           在右側修改內容後執行
         </button>
-        <button type="button" disabled>
+        <button type="button" className="quiet-action danger" disabled>
           拒絕並退回 Agent
         </button>
       </div>
@@ -60,7 +60,7 @@ export function ChatStream() {
               <div className="claim-card">
                 <strong>{artifact.title}</strong>
                 <p>{artifact.summary_200_words}</p>
-                <button type="button" onClick={() => selectArtifact(artifact.artifact_id)}>
+                <button type="button" className="quiet-action" onClick={() => selectArtifact(artifact.artifact_id)}>
                   <FileText size={16} aria-hidden="true" /> 在右側工作區開啟完整規格與圖表
                 </button>
               </div>
