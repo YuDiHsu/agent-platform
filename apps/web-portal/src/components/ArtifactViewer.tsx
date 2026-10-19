@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { decideHitl } from "@/lib/api";
+import { TerminalOutputCard } from "@/components/TerminalOutputCard";
 import { BrowserLocalFsBridge } from "@/lib/localFsBridge";
 import { cancelDiskWrite, confirmDiskWrite } from "@/lib/wsClientToolRunner";
 import { useWorkspaceStore, type HitlRequestUI, type RightPaneTab } from "@/lib/store/useWorkspaceStore";
@@ -110,6 +111,7 @@ function MarkdownBody({ content }: { content: string }) {
 
 function HitlEditForm({ request }: { request: HitlRequestUI }) {
   const markHitlDecided = useWorkspaceStore((state) => state.markHitlDecided);
+  const handleSSEEvent = useWorkspaceStore((state) => state.handleSSEEvent);
   const clearHitlEditor = useWorkspaceStore((state) => state.clearHitlEditor);
   const [draft, setDraft] = useState(JSON.stringify(request.proposed_payload, null, 2));
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +133,10 @@ function HitlEditForm({ request }: { request: HitlRequestUI }) {
           return;
         }
         void decideHitl(request.hitl_request_id, { status: "MODIFIED", user_modified_payload: parsed })
-          .then(() => markHitlDecided(request.hitl_request_id))
+          .then((decided) => {
+            markHitlDecided(request.hitl_request_id);
+            if (decided.cli_output) handleSSEEvent("cli_output", decided.cli_output);
+          })
           .catch((caught: unknown) => {
             setError(caught instanceof Error ? caught.message : "無法送出修改後的參數。");
           });
@@ -228,6 +233,7 @@ export function ArtifactWorkbench() {
   const artifacts = useWorkspaceStore((state) => state.artifacts);
   const selectedArtifactId = useWorkspaceStore((state) => state.selectedArtifactId);
   const dagSteps = useWorkspaceStore((state) => state.dagSteps);
+  const terminalLogs = useWorkspaceStore((state) => state.terminalLogs);
   const mountedFolders = useWorkspaceStore((state) => state.mountedFolders);
   const openPendingLocalDiff = useWorkspaceStore((state) => state.openPendingLocalDiff);
   const selected = artifacts.find((item) => item.artifact_id === selectedArtifactId) ?? artifacts[0];
@@ -306,7 +312,17 @@ export function ArtifactWorkbench() {
           )
         ) : null}
         {activeRightTab === "FILE_DIFF" ? <FileDiffPanel /> : null}
-        {activeRightTab === "TERMINAL_CLI" ? <p className="empty">技能的終端機輸出會在沙盒執行完成後出現。</p> : null}
+        {activeRightTab === "TERMINAL_CLI" ? (
+          terminalLogs.length === 0 ? (
+            <p className="empty">技能的終端機輸出會在沙盒執行完成後出現。</p>
+          ) : (
+            <div className="terminal-list" aria-live="polite">
+              {terminalLogs.map((log) => (
+                <TerminalOutputCard key={log.id} log={log} />
+              ))}
+            </div>
+          )
+        ) : null}
         {activeRightTab === "PROMPT_INSPECTOR" ? <p className="empty">洋蔥式提示詞檢視會在規範編譯完成後出現。</p> : null}
       </div>
       {activeRightTab === "ARTIFACT" && selected ? (

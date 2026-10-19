@@ -12,6 +12,7 @@ from app.db.models import ChatSession, HitlApprovalRequest
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.supervisor import ChatTurn
+from app.tool_bus.cli_executor import CLI_TOOL_NAME, cli_event
 
 router = APIRouter()
 
@@ -65,6 +66,7 @@ async def decide_hitl(
         tool_name = row.tool_name
         role_code = row.executing_role_code
 
+    cli_events: list[dict[str, Any]] = []
     if executed is not None:
         from app.tool_bus.bus import UnifiedToolBus
 
@@ -75,13 +77,19 @@ async def decide_hitl(
             calls=[(tool_name, executed)],
         )
         instruction = f"{instruction}\n工具結果：{sent[0].output if sent[0].ok else sent[0].error}"
+        if tool_name == CLI_TOOL_NAME and sent[0].ok:
+            event = cli_event(role_code, sent[0].output)
+            if event is not None:
+                cli_events.append(event)
 
     outcome = await ChatTurn(llm, user_id=user.id, session_id=session_id, message=query).resume_after_decision(
         ticket_id=ticket_id,
         instructions=instruction,
+        cli_outputs=cli_events,
     )
     return {
         "status": body.status,
         "executed_payload": executed,
         "ticket_status": "COMPLETED" if outcome.kind == "completed" else outcome.kind,
+        "cli_output": cli_events[0] if cli_events else None,
     }

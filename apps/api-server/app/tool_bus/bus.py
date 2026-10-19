@@ -18,11 +18,13 @@ from app.core.crypto_vault import read_connector_token
 from app.db.models import AgentRole, AgentRoleTool, ToolRegistry, UserToolPreference
 from app.db.session import database_session
 from app.tool_bus import connectors as _connectors
+from app.tool_bus import cli_adapter as _cli_adapter
 from app.tool_bus import local_fs as _local_fs
 from app.tool_bus.adapter import BaseToolAdapter, ToolContext, ToolResult, registered_adapters
 from app.tool_bus.remote import HttpWebhookToolAdapter, RemoteMCPToolAdapter
 
-_ = (_connectors, _local_fs)
+_ = (_connectors, _local_fs, _cli_adapter)
+_UNCACHED_NAMESPACES = {"skill_cli"}
 
 _BROWSER_TERMINAL = {"BROWSER_OFFLINE", "TIMEOUT", "ERROR"}
 
@@ -159,7 +161,8 @@ class UnifiedToolBus:
             return ToolResult(plan.tool_name, False, {}, plan.error or "無法執行")
         if not self._breaker.allow(plan.namespace):
             return ToolResult(plan.tool_name, False, {}, "斷路器已開啟")
-        if plan.tier == "READ":
+        cacheable = plan.tier == "READ" and plan.namespace not in _UNCACHED_NAMESPACES
+        if cacheable:
             cached = await _cache_get(session_id, plan.tool_name, plan.arguments)
             if cached is not None:
                 return ToolResult(plan.tool_name, True, cached)
@@ -182,7 +185,7 @@ class UnifiedToolBus:
         if isinstance(output, dict) and output.get("status") in _BROWSER_TERMINAL:
             return ToolResult(plan.tool_name, False, output, str(output.get("error") or output.get("status")))
         self._breaker.record_success(plan.namespace)
-        if plan.tier == "READ":
+        if cacheable:
             await _cache_set(session_id, plan.tool_name, plan.arguments, output)
         return ToolResult(plan.tool_name, True, output)
 

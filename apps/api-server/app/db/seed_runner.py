@@ -23,6 +23,7 @@ from app.db.models import (
 from app.llm.embedding_client import EmbeddingClient
 from app.tool_bus.adapter import registered_adapters
 import app.tool_bus.connectors  # noqa: F401
+import app.tool_bus.cli_adapter  # noqa: F401
 import app.tool_bus.local_fs  # noqa: F401
 
 ROLES_PATH = REPO_ROOT / "packages" / "builtin-roles" / "seed_roles.yaml"

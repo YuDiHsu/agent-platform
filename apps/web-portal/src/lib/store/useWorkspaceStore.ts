@@ -369,6 +369,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       artifacts: snapshot.artifacts,
       selectedArtifactId: snapshot.artifacts[0]?.artifact_id ?? null,
       hitlRequests: snapshot.pending_hitl,
+      terminalLogs: snapshot.messages
+        .filter((message) => message.event_type === "cli_output" && message.payload)
+        .map((message) => message.payload as unknown as TerminalExecutionLogUI)
+        .reverse(),
       messages: snapshot.messages.map((message) => ({
         id: message.id,
         roleCode: message.role_code,

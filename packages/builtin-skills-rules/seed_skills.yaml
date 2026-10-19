@@ -25,7 +25,11 @@ skills:
     bound_role_codes: [SA, ARCH]
     cli_config:
       action_tier: READ
+      sync_local_files: true
+      timeout_seconds: 30
       command_template: python3 /opt/skill-scripts/validate_openapi.py --file {{target_file}}
+      allowed_args_schema:
+        target_file: {type: string, minLength: 1, maxLength: 260, pattern: "^[A-Za-z0-9_.][A-Za-z0-9_./-]*$"}
     sop_markdown: |
       1. 先取得規格檔路徑，再以沙盒腳本檢查，不在提示詞中心算 JSON 結構。
       2. 命令模板為 `python3 /opt/skill-scripts/validate_openapi.py --file {{target_file}}`。
@@ -41,7 +45,11 @@ skills:
     bound_role_codes: [FIN]
     cli_config:
       action_tier: READ
+      timeout_seconds: 30
       command_template: python3 /opt/skill-scripts/fin_calculator.py --cashflows {{cashflows}} --rate {{rate}}
+      allowed_args_schema:
+        cashflows: {type: string, pattern: "^-?[0-9]+(\\.[0-9]+)?(,-?[0-9]+(\\.[0-9]+)?)*$"}
+        rate: {type: [string, number], pattern: "^-?[0-9]+(\\.[0-9]+)?$"}
     sop_markdown: |
       1. 現金流以逗號分隔，第 0 期為初始投入（通常為負數）。
       2. 折現率 `rate` 使用小數，例如 0.08 代表 8%。
@@ -57,7 +65,10 @@ skills:
     bound_role_codes: [SE]
     cli_config:
       action_tier: READ
+      timeout_seconds: 120
       command_template: pytest {{test_target}} -q --tb=short
+      allowed_args_schema:
+        test_target: {type: string, minLength: 1, maxLength: 260, pattern: "^[A-Za-z0-9_.][A-Za-z0-9_./:\\[\\]-]*$"}
     sop_markdown: |
       1. `test_target` 只能是使用者已授權工作目錄內的路徑或測試節點。
       2. 命令模板為 `pytest {{test_target}} -q --tb=short`。

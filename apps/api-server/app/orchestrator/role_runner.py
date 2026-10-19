@@ -3,7 +3,7 @@
 Implements: REQ-002, REQ-008, ADR-0002, ADR-0003.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -12,8 +12,10 @@ from app.db.models import ChatSession, HitlApprovalRequest, TaskTicket, User
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.artifact_manager import store_artifact
-from app.orchestrator.state import ArtifactPointer, SubAgentExecutionOutput
+from app.orchestrator.state import ArtifactPointer, SubAgentExecutionOutput, SubAgentToolCall
 from app.tool_bus.adapter import ToolResult
+from app.tool_bus.cli_executor import CLI_TOOL_NAME, CliRejected, PreparedCli, SkillCLIExecutor, cli_event
+from app.tool_bus.sandbox_runner import get_sandbox_runner
 
 def _activated_skill(output: SubAgentExecutionOutput) -> str | None:
     if output.execution_status != "NEED_TOOL_CALL" or not output.tool_calls:
@@ -38,6 +40,26 @@ class StepOutcome:
     hitl: dict[str, Any] | None = None
     detail: str | None = None
     skill_activated: dict[str, str] | None = None
+    cli_outputs: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _cli_events(results: list[ToolResult], role_code: str) -> list[dict[str, Any]]:
+    events = [
+        cli_event(role_code, item.output)
+        for item in results
+        if item.tool_name == CLI_TOOL_NAME and item.ok and isinstance(item.output, dict)
+    ]
+    return [event for event in events if event is not None]
+
+
+async def _prepare_cli(call: SubAgentToolCall, user_id: UUID, role_code: str) -> PreparedCli:
+    cli_args = call.arguments.get("cli_args")
+    return await SkillCLIExecutor(get_sandbox_runner()).prepare(
+        user_id=user_id,
+        role_code=role_code,
+        skill_code=str(call.arguments.get("skill_code", "")),
+        cli_args=cli_args if isinstance(cli_args, dict) else {},
+    )
 
 
 def _browser_offline(results: list[ToolResult]) -> bool:
@@ -85,6 +107,7 @@ class RoleRunner:
             query=original_query,
         )
         activated: dict[str, str] | None = None
+        cli_outputs: list[dict[str, Any]] = []
         try:
             output = await self._llm.generate_structured(
                 system_prompt=prompt,
@@ -126,16 +149,27 @@ class RoleRunner:
                 runnable: list[tuple[str, dict[str, Any]]] = []
                 blocked = None
                 browser_call = None
+                rejected_cli: tuple[SubAgentToolCall, str] | None = None
                 for call in output.tool_calls:
                     if call.tool_name in BROWSER_WAIT_TOOLS:
                         browser_call = call
                         break
-                    tier = await self._action_tier(call.tool_name)
+                    if call.tool_name == CLI_TOOL_NAME:
+                        try:
+                            tier = (await _prepare_cli(call, user_id, role_code)).tier
+                        except CliRejected as exc:
+                            rejected_cli = (call, str(exc))
+                            break
+                    else:
+                        tier = await self._action_tier(call.tool_name)
                     pair = (call.tool_name, dict(call.arguments))
                     if tier == "COMMIT":
                         blocked = call
                         break
                     runnable.append(pair)
+                if rejected_cli is not None:
+                    output = await self._refused(prompt, role_code, rejected_cli[0].tool_name, rejected_cli[1])
+                    continue
                 if browser_call is not None:
                     results = await bus.dispatch(
                         role_code=role_code,
@@ -171,19 +205,7 @@ class RoleRunner:
                         call=(blocked.tool_name, dict(blocked.arguments)),
                     )
                     if reason is not None:
-                        output = await self._llm.generate_structured(
-                            system_prompt=prompt,
-                            messages=[
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        f"target_role_code: {role_code}\n"
-                                        f"工具 {blocked.tool_name} 已拒絕：{reason}。請不要再呼叫它。"
-                                    ),
-                                }
-                            ],
-                            response_model=SubAgentExecutionOutput,
-                        )
+                        output = await self._refused(prompt, role_code, blocked.tool_name, reason)
                         continue
                     output = output.model_copy(update={"tool_calls": [blocked]})
                     break
@@ -195,6 +217,7 @@ class RoleRunner:
                     session_id=chat_session_id,
                     calls=runnable,
                 )
+                cli_outputs.extend(_cli_events(results, role_code))
                 summary = "；".join(
                     f"{item.tool_name} {'已直接執行' if item.ok else '執行失敗'} {item.output or item.error}"
                     for item in results
@@ -212,6 +235,14 @@ class RoleRunner:
                     ],
                     response_model=SubAgentExecutionOutput,
                 )
+            prepared_cli: PreparedCli | None = None
+            if output.execution_status == "NEED_TOOL_CALL" and output.tool_calls:
+                first = output.tool_calls[0]
+                if first.tool_name == CLI_TOOL_NAME:
+                    prepared_cli = await _prepare_cli(first, user_id, role_code)
+        except CliRejected as exc:
+            await self._fail(ticket_id, str(exc))
+            return StepOutcome(kind="failed", detail=str(exc), cli_outputs=cli_outputs)
         except Exception as exc:
             await self._fail(ticket_id, str(exc))
             return StepOutcome(kind="failed", detail=str(exc))
@@ -237,13 +268,27 @@ class RoleRunner:
                     user_id=user_id,
                     role_code=role_code,
                     output=output,
+                    prepared_cli=prepared_cli,
                 )
             else:
                 ticket.status = "FAILED"
                 ticket.error_log = output.thought_process
                 outcome = StepOutcome(kind="failed", detail=output.thought_process)
             outcome.skill_activated = activated
+            outcome.cli_outputs = cli_outputs
             return outcome
+
+    async def _refused(self, prompt: str, role_code: str, tool_name: str, reason: str) -> SubAgentExecutionOutput:
+        return await self._llm.generate_structured(
+            system_prompt=prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"target_role_code: {role_code}\n工具 {tool_name} 已拒絕：{reason}。請不要再呼叫它。",
+                }
+            ],
+            response_model=SubAgentExecutionOutput,
+        )
 
     async def _complete(
         self,
@@ -292,6 +337,7 @@ class RoleRunner:
         user_id: UUID,
         role_code: str,
         output: SubAgentExecutionOutput,
+        prepared_cli: PreparedCli | None = None,
     ) -> StepOutcome:
         if not output.tool_calls:
             ticket.status = "FAILED"
@@ -303,7 +349,15 @@ class RoleRunner:
         hitl: dict[str, Any] | None = None
         if status == "WAITING_HITL":
             preview = f"{role_code} 請求執行 {call.tool_name}"
-            tier = await self._tier_in(db, call.tool_name)
+            payload = call.arguments
+            target = execution_target_for(call.tool_name)
+            if prepared_cli is not None:
+                tier = prepared_cli.tier
+                target = prepared_cli.execution_mode
+                payload = {**call.arguments, "rendered_command": prepared_cli.rendered_command}
+                preview = f"{role_code} 請求執行 CLI：{prepared_cli.rendered_command}"
+            else:
+                tier = await self._tier_in(db, call.tool_name)
             if tier != "COMMIT":
                 ticket.status = "FAILED"
                 ticket.error_log = f"{call.tool_name} 是 {tier}，不進入審批"
@@ -314,10 +368,10 @@ class RoleRunner:
                 user_id=user_id,
                 executing_role_code=role_code,
                 tool_name=call.tool_name,
-                execution_target=execution_target_for(call.tool_name),
+                execution_target=target,
                 action_tier=tier,
                 preview_title=preview,
-                proposed_payload=call.arguments,
+                proposed_payload=payload,
                 status="PENDING",
             )
             db.add(row)
@@ -330,7 +384,7 @@ class RoleRunner:
                 "tool_name": call.tool_name,
                 "execution_target": row.execution_target,
                 "preview_title": preview,
-                "proposed_payload": call.arguments,
+                "proposed_payload": payload,
                 "status": "PENDING",
             }
         return StepOutcome(kind="hibernated", wait_status=status, hitl=hitl, detail=call.tool_name)

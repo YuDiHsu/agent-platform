@@ -8,14 +8,16 @@ import { useWorkspaceStore, type HitlRequestUI } from "@/lib/store/useWorkspaceS
 export function HitlApprovalCard({ request }: { request: HitlRequestUI }) {
   const beginHitlEdit = useWorkspaceStore((state) => state.beginHitlEdit);
   const markHitlDecided = useWorkspaceStore((state) => state.markHitlDecided);
+  const handleSSEEvent = useWorkspaceStore((state) => state.handleSSEEvent);
   const pending = request.status === "PENDING";
 
   async function send(status: "APPROVED" | "REJECTED") {
-    await decideHitl(request.hitl_request_id, {
+    const decided = await decideHitl(request.hitl_request_id, {
       status,
       rejection_reason: status === "REJECTED" ? "使用者拒絕這次操作" : undefined,
     });
     markHitlDecided(request.hitl_request_id);
+    if (decided.cli_output) handleSSEEvent("cli_output", decided.cli_output);
   }
 
   return (

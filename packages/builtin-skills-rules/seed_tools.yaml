@@ -54,6 +54,20 @@ tools:
       properties:
         channel: {type: string}
         text: {type: string}
+  - code: execute_skill_cli
+    namespace: skill_cli
+    name: 執行 CLI 技能
+    description: 執行已啟用技能的參數化命令列。READ 技能直接執行，COMMIT 技能先審批。
+    action_tier: READ
+    execution_target: SERVER_SANDBOX_CLI
+    timeout_seconds: 90
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        skill_code: {type: string}
+        cli_args: {type: object}
+      required: [skill_code, cli_args]
   - code: workspace_list_files
     namespace: local_fs
     name: 列出本機檔案

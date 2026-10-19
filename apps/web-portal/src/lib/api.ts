@@ -277,13 +277,15 @@ export async function fetchTools(): Promise<CatalogTool[]> {
 export async function decideHitl(
   requestId: string,
   body: { status: "APPROVED" | "MODIFIED" | "REJECTED"; user_modified_payload?: Record<string, unknown>; rejection_reason?: string },
-): Promise<void> {
+): Promise<{ cli_output: Record<string, unknown> | null }> {
   const response = await fetch(`${apiBase}/api/v1/hitl/${requestId}/decide`, {
     method: "POST",
     headers: headers(),
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error("無法送出審批決定。");
+  const decided = (await response.json()) as { cli_output?: Record<string, unknown> | null };
+  return { cli_output: decided.cli_output ?? null };
 }
 
 export async function setToolPreference(code: string, isEnabled: boolean): Promise<void> {

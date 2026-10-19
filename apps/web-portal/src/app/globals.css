@@ -256,6 +256,19 @@ button:disabled, .text-button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 12px 16px;
   border-top: 1px solid var(--line);
 }
+.terminal-list { display: grid; gap: 12px; }
+.terminal-card { background: #0c0f0d; color: #d7e3da; border-radius: 12px; padding: 12px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.8rem; display: grid; gap: 8px; }
+.terminal-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.terminal-command { color: #9ed4b6; overflow-wrap: anywhere; }
+.terminal-stream { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; }
+.ansi-bold { font-weight: 700; }
+.ansi-fg-red, .ansi-fg-bright-red { color: #ff8a80; }
+.ansi-fg-green, .ansi-fg-bright-green { color: #8ee0a7; }
+.ansi-fg-yellow, .ansi-fg-bright-yellow { color: #f3d37a; }
+.ansi-fg-blue, .ansi-fg-bright-blue { color: #8fb8ff; }
+.ansi-fg-magenta, .ansi-fg-bright-magenta { color: #e0a3ff; }
+.ansi-fg-cyan, .ansi-fg-bright-cyan { color: #7fe0e8; }
+.ansi-fg-white, .ansi-fg-bright-white, .ansi-fg-black { color: #e8efe9; }
 .mount-control { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .file-diff h2 { margin-top: 0; }
 .file-diff .hitl-actions { margin-top: 12px; }

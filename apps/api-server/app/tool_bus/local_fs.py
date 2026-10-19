@@ -63,7 +63,7 @@ class LocalFsAdapter(BaseToolAdapter):
         return True
 
     async def execute(self, tool_name: str, arguments: dict[str, Any], context: ToolContext) -> dict[str, Any]:
-        owner_id, handle_key = await _mount_owner_and_handle(context.user_id, arguments.get("mount_id"))
+        owner_id, handle_key = await mount_owner_and_handle(context.user_id, arguments.get("mount_id"))
         if not handle_key:
             return dict(_OFFLINE)
         path = str(arguments.get("path") or arguments.get("file_path") or "")
@@ -123,7 +123,7 @@ class LocalFsAdapter(BaseToolAdapter):
         return {"status": "SUCCESS", "path": path, "markdown": markdown, "chunked": chunked}
 
 
-async def _mount_owner_and_handle(user_id: str, mount_id: object) -> tuple[str, str]:
+async def mount_owner_and_handle(user_id: str, mount_id: object) -> tuple[str, str]:
     async with database_session() as db:
         if mount_id:
             mount = await db.get(LocalWorkspaceMount, UUID(str(mount_id)))

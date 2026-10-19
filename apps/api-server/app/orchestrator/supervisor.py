@@ -168,7 +168,22 @@ class ChatTurn:
                 return
         await self._finish_completed()
 
-    async def resume_after_decision(self, *, ticket_id: UUID, instructions: str) -> StepOutcome:
+    async def _emit_cli_outputs(self, outputs: list[dict[str, Any]]) -> None:
+        for output in outputs:
+            await self._emit(
+                "cli_output",
+                role_code=str(output["role_code"]),
+                content=f"{output['skill_code']} 執行完成（exit {output['exit_code']}）",
+                payload=output,
+            )
+
+    async def resume_after_decision(
+        self,
+        *,
+        ticket_id: UUID,
+        instructions: str,
+        cli_outputs: list[dict[str, Any]] | None = None,
+    ) -> StepOutcome:
         """Wake one paused ticket, then run every later step still stored in the checkpoint."""
 
         await self._load_quota()
@@ -186,6 +201,7 @@ class ChatTurn:
                 "task_title": node["task_title"],
             },
         )
+        await self._emit_cli_outputs(cli_outputs or [])
         outcome = await self._runner.infer_and_finish(
             chat_session_id=self._session_id,
             ticket_id=ticket_id,
@@ -194,6 +210,7 @@ class ChatTurn:
             original_query=self._message,
             instructions=instructions,
         )
+        await self._emit_cli_outputs(outcome.cli_outputs)
         if outcome.kind == "completed" and outcome.pointer is not None:
             self._pointers[int(node["step_id"])] = outcome.pointer
             payload = outcome.pointer.model_dump()
@@ -348,6 +365,7 @@ class ChatTurn:
                     content=f"已啟用技能 {outcome.skill_activated['skill_code']}",
                     payload=outcome.skill_activated,
                 )
+            await self._emit_cli_outputs(outcome.cli_outputs)
         if outcome.kind == "completed" and outcome.pointer is not None:
             self._pointers[int(node["step_id"])] = outcome.pointer
             payload = outcome.pointer.model_dump()
