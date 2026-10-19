@@ -21,6 +21,7 @@ from app.db.session import database_session_depth, get_session_factory
 from app.llm.embedding_client import EmbeddingClient
 from app.main import app
 from app.orchestrator.runtime import drain_background
+from app.tool_bus.http_pool import set_http_client
 from app.orchestrator.state import (
     DAGTaskNode,
     OrchestratorPlanOutput,
@@ -841,6 +842,12 @@ async def test_commit_tool_pauses_and_modified_payload_is_what_resumes(
 ) -> None:
     scripted.mode = "hitl"
     user = await _login(client)
+    enabled = await client.put(
+        "/api/v1/users/me/tool-preferences",
+        headers=_headers(user),
+        json={"code": "o365_send_mail", "is_enabled": True},
+    )
+    assert enabled.status_code == 204
     stranger = await _login(client)
     session_id = await _open_session(client, user)
     events = await _send(client, user, session_id, "請寄出進度信")
@@ -856,6 +863,13 @@ async def test_commit_tool_pauses_and_modified_payload_is_what_resumes(
     )
     assert forbidden.status_code == 403
     scripted.prompts.clear()
+    sent: list[str] = []
+
+    def _record(request: httpx.Request) -> httpx.Response:
+        sent.append(request.content.decode())
+        return httpx.Response(200, json={"ok": True})
+
+    set_http_client(httpx.AsyncClient(transport=httpx.MockTransport(_record)))
     decided = await client.post(
         f"/api/v1/hitl/{request_id}/decide",
         headers=_headers(user),
@@ -869,6 +883,7 @@ async def test_commit_tool_pauses_and_modified_payload_is_what_resumes(
     resumed = "\n".join(scripted.prompts)
     assert "boss@company.com" in resumed
     assert "使用者已核准" in resumed
+    assert any("boss@company.com" in body for body in sent)
     after = await _state(client, user, session_id)
     assert after["pending_hitl"] == []
     assert after["status"] == "COMPLETED"

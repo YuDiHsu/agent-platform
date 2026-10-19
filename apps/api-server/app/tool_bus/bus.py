@@ -77,6 +77,21 @@ class UnifiedToolBus:
             plans = [await self._plan(db, role_code=role_code, user_id=user_id, call=call) for call in calls]
         return list(await asyncio.gather(*(self._run(plan, session_id=session_id, role_code=role_code, user_id=user_id) for plan in plans)))
 
+    async def refusal(
+        self,
+        *,
+        role_code: str,
+        user_id: UUID,
+        call: tuple[str, dict[str, Any]],
+    ) -> str | None:
+        """Return why this call must not run. None means the role and the user both allow it."""
+
+        async with database_session() as db:
+            plan = await self._plan(db, role_code=role_code, user_id=user_id, call=call)
+        if plan.allowed:
+            return None
+        return plan.error or "工具未授權或已關閉"
+
     async def _plan(
         self,
         db: AsyncSession,

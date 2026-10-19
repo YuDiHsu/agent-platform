@@ -16,15 +16,19 @@ from app.db.migrate import run_migrations
 from app.db.seed_runner import SeedRunner
 from app.db.session import get_session_factory
 from app.llm.embedding_client import EmbeddingClient
+from app.tool_bus.http_pool import get_http_client, set_http_client
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    get_http_client()
     run_migrations()
     if settings.SEED_ON_STARTUP:
         async with get_session_factory()() as session:
             await SeedRunner(session, EmbeddingClient()).run()
     yield
+    await get_http_client().aclose()
+    set_http_client(None)
 
 
 app = FastAPI(title="Enterprise Multi-Agent Platform", lifespan=lifespan)

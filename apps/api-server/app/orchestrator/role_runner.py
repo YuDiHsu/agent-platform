@@ -108,22 +108,49 @@ class RoleRunner:
                     ],
                     response_model=SubAgentExecutionOutput,
                 )
+            from app.tool_bus.bus import UnifiedToolBus
+
+            bus = UnifiedToolBus()
             for _ in range(2):
                 if output.execution_status != "NEED_TOOL_CALL" or not output.tool_calls:
                     break
                 runnable: list[tuple[str, dict[str, Any]]] = []
+                blocked = None
                 for call in output.tool_calls:
                     if call.tool_name in BROWSER_WAIT_TOOLS:
                         break
                     tier = await self._action_tier(call.tool_name)
+                    pair = (call.tool_name, dict(call.arguments))
                     if tier == "COMMIT":
+                        blocked = call
                         break
-                    runnable.append((call.tool_name, dict(call.arguments)))
+                    runnable.append(pair)
+                if blocked is not None:
+                    reason = await bus.refusal(
+                        role_code=role_code,
+                        user_id=user_id,
+                        call=(blocked.tool_name, dict(blocked.arguments)),
+                    )
+                    if reason is not None:
+                        output = await self._llm.generate_structured(
+                            system_prompt=prompt,
+                            messages=[
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"target_role_code: {role_code}\n"
+                                        f"工具 {blocked.tool_name} 已拒絕：{reason}。請不要再呼叫它。"
+                                    ),
+                                }
+                            ],
+                            response_model=SubAgentExecutionOutput,
+                        )
+                        continue
+                    output = output.model_copy(update={"tool_calls": [blocked]})
+                    break
                 if not runnable:
                     break
-                from app.tool_bus.bus import UnifiedToolBus
-
-                results = await UnifiedToolBus().dispatch(
+                results = await bus.dispatch(
                     role_code=role_code,
                     user_id=user_id,
                     session_id=chat_session_id,
