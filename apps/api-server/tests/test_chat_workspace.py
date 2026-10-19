@@ -815,6 +815,13 @@ async def test_read_and_draft_tools_finish_without_pausing(
     scripted: ScriptedGemma,
 ) -> None:
     user = await _login(client)
+    for code in ("o365_search_messages", "o365_create_draft"):
+        enabled = await client.put(
+            "/api/v1/users/me/tool-preferences",
+            headers=_headers(user),
+            json={"code": code, "is_enabled": True},
+        )
+        assert enabled.status_code == 204
     for mode in ("read_pass", "draft_pass"):
         scripted.mode = mode
         scripted.prompts.clear()

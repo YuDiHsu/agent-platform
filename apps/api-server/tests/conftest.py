@@ -165,6 +165,16 @@ from app.db.migrate import run_migrations
 
 run_migrations()
 
+import httpx
+from app.tool_bus.http_pool import set_http_client
+
+
+def _connector_ok(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"ok": True, "path": request.url.path})
+
+
+set_http_client(httpx.AsyncClient(transport=httpx.MockTransport(_connector_ok)))
+
 
 @pytest.fixture(autouse=True)
 async def release_database_connections():

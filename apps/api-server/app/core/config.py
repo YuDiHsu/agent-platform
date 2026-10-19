@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     EMBEDDING_DIMENSION: int = Field(default=1024, ge=1)
     EMBEDDING_API_KEY: str = "local"
     TOKEN_VAULT_KEY: str = ""
+    O365_BASE_URL: str = "https://graph.microsoft.com/v1.0"
+    SLACK_BASE_URL: str = "https://slack.com/api"
+    MAIL_GATEWAY_BASE_URL: str = "http://mail-gateway:8080"
     SEED_ON_STARTUP: bool = True
     CORS_ORIGINS: str = "http://localhost:3000"
 

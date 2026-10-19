@@ -111,12 +111,28 @@ class RoleRunner:
             for _ in range(2):
                 if output.execution_status != "NEED_TOOL_CALL" or not output.tool_calls:
                     break
-                call = output.tool_calls[0]
-                if call.tool_name in BROWSER_WAIT_TOOLS:
+                runnable: list[tuple[str, dict[str, Any]]] = []
+                for call in output.tool_calls:
+                    if call.tool_name in BROWSER_WAIT_TOOLS:
+                        break
+                    tier = await self._action_tier(call.tool_name)
+                    if tier == "COMMIT":
+                        break
+                    runnable.append((call.tool_name, dict(call.arguments)))
+                if not runnable:
                     break
-                tier = await self._action_tier(call.tool_name)
-                if tier == "COMMIT":
-                    break
+                from app.tool_bus.bus import UnifiedToolBus
+
+                results = await UnifiedToolBus().dispatch(
+                    role_code=role_code,
+                    user_id=user_id,
+                    session_id=chat_session_id,
+                    calls=runnable,
+                )
+                summary = "；".join(
+                    f"{item.tool_name} {'已直接執行' if item.ok else '執行失敗'} {item.output or item.error}"
+                    for item in results
+                )
                 output = await self._llm.generate_structured(
                     system_prompt=prompt,
                     messages=[
@@ -124,8 +140,7 @@ class RoleRunner:
                             "role": "user",
                             "content": (
                                 f"target_role_code: {role_code}\n"
-                                f"工具 {call.tool_name} 屬於 {tier}，已直接執行。"
-                                f"參數 {call.arguments}。請完成交付，不要再呼叫工具。"
+                                f"{summary}。請完成交付，不要再呼叫工具。"
                             ),
                         }
                     ],
@@ -223,6 +238,10 @@ class RoleRunner:
         if status == "WAITING_HITL":
             preview = f"{role_code} 請求執行 {call.tool_name}"
             tier = await self._tier_in(db, call.tool_name)
+            if tier != "COMMIT":
+                ticket.status = "FAILED"
+                ticket.error_log = f"{call.tool_name} 是 {tier}，不進入審批"
+                return StepOutcome(kind="failed", detail=ticket.error_log)
             row = HitlApprovalRequest(
                 ticket_id=ticket.id,
                 session_id=chat_session_id,

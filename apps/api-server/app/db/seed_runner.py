@@ -21,6 +21,8 @@ from app.db.models import (
     ToolRegistry,
 )
 from app.llm.embedding_client import EmbeddingClient
+from app.tool_bus.adapter import registered_adapters
+import app.tool_bus.connectors  # noqa: F401
 
 ROLES_PATH = REPO_ROOT / "packages" / "builtin-roles" / "seed_roles.yaml"
 RULES_PATH = REPO_ROOT / "packages" / "builtin-skills-rules" / "seed_rules.yaml"
@@ -125,6 +127,7 @@ class SeedRunner:
                     .values(role_id=role.id, tool_id=tool.id)
                     .on_conflict_do_nothing(index_elements=["role_id", "tool_id"])
                 )
+        await self._sync_adapter_tools()
         await self._session.commit()
         catalog = await read_builtin_catalog(self._session)
         return SeedSummary(
@@ -205,6 +208,34 @@ class SeedRunner:
         for key, value in fields.items():
             setattr(existing, key, value)
         return existing
+
+    async def _sync_adapter_tools(self) -> None:
+        missing: list[tuple[str, Any]] = []
+        for adapter_cls in registered_adapters():
+            adapter = adapter_cls()
+            for spec in adapter.list_tools():
+                existing = await self._session.scalar(select(ToolRegistry).where(ToolRegistry.code == spec.code))
+                if existing is None:
+                    missing.append((adapter.namespace, spec))
+        if not missing:
+            return
+        vectors = await self._embedder.embed_texts([spec.description for _namespace, spec in missing])
+        for (namespace, spec), vector in zip(missing, vectors, strict=True):
+            self._session.add(
+                ToolRegistry(
+                    code=spec.code,
+                    namespace=namespace,
+                    name=spec.name,
+                    description=spec.description,
+                    input_json_schema=spec.input_json_schema or {"type": "object"},
+                    action_tier=spec.action_tier,
+                    scope_type="COMMON_DEFAULT",
+                    is_visible_to_user=True,
+                    routing_embedding=vector,
+                    is_active=True,
+                )
+            )
+        await self._session.flush()
 
     async def _upsert_tool(self, doc: dict[str, Any], embedding: list[float]) -> ToolRegistry:
         code = str(doc["code"])

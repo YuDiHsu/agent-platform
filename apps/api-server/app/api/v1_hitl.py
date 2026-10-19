@@ -62,6 +62,19 @@ async def decide_hitl(
         row.decided_at = datetime.now(UTC)
         ticket_id = row.ticket_id
         session_id = row.session_id
+        tool_name = row.tool_name
+        role_code = row.executing_role_code
+
+    if executed is not None:
+        from app.tool_bus.bus import UnifiedToolBus
+
+        sent = await UnifiedToolBus().dispatch(
+            role_code=role_code,
+            user_id=user.id,
+            session_id=session_id,
+            calls=[(tool_name, executed)],
+        )
+        instruction = f"{instruction}\n工具結果：{sent[0].output if sent[0].ok else sent[0].error}"
 
     outcome = await ChatTurn(llm, user_id=user.id, session_id=session_id, message=query).resume_after_decision(
         ticket_id=ticket_id,
