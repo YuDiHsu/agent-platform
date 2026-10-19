@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AgentRole, AgentRoleTool, ToolRegistry, UserToolPreference
+from app.db.models import AgentRole, AgentRoleTool, ToolRegistry, UserAgentConfig, UserToolPreference
 from app.orchestrator.prompt_compiler import PromptCompiler, ToolSchema
 
 TOP_K = 5
@@ -95,6 +95,10 @@ class ToolRetriever:
             and_(AgentRole.visibility_scope == "DEPARTMENT", AgentRole.department == user_department),
             and_(AgentRole.visibility_scope == "PRIVATE", AgentRole.creator_user_id == user_id),
         )
+        blocked = select(UserAgentConfig.role_id).where(
+            UserAgentConfig.user_id == user_id,
+            or_(UserAgentConfig.is_enabled.is_(False), UserAgentConfig.is_removed.is_(True)),
+        )
         rows = (
             await db.execute(
                 select(AgentRole, distance.label("distance"))
@@ -103,6 +107,7 @@ class ToolRetriever:
                     AgentRole.approval_status == "APPROVED",
                     AgentRole.routing_embedding.is_not(None),
                     visible,
+                    AgentRole.id.not_in(blocked),
                 )
                 .order_by(distance.asc())
                 .limit(TOP_K)

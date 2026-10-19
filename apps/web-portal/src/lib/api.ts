@@ -295,3 +295,108 @@ export async function setToolPreference(code: string, isEnabled: boolean): Promi
   if (!response.ok) throw new Error("無法更新工具開關。");
 }
 
+export interface WorkspaceAgent {
+  code: string;
+  name: string;
+  is_preset: boolean;
+  is_enabled: boolean;
+  visibility_scope: "PRIVATE" | "DEPARTMENT" | "GLOBAL" | string;
+  approval_status: string;
+  department: string;
+  bound_local_mount_id: string | null;
+  system_prompt: string;
+  routing_description: string;
+}
+
+export interface GeneratedAgentSpec {
+  name: string;
+  code: string;
+  system_prompt: string;
+  routing_description: string;
+  recommended_rule_codes: string[];
+  recommended_skill_codes: string[];
+  recommended_tool_codes: string[];
+}
+
+async function readError(response: Response, fallback: string): Promise<never> {
+  const body = (await response.json().catch(() => null)) as { detail?: string } | null;
+  throw new Error(body?.detail || fallback);
+}
+
+export async function fetchWorkspaceAgents(): Promise<WorkspaceAgent[]> {
+  const response = await fetch(`${apiBase}/api/v1/agents`, { headers: headers() });
+  if (!response.ok) return readError(response, "無法讀取 Agent 工作區。");
+  return (await response.json()) as WorkspaceAgent[];
+}
+
+export async function generateAgentSpec(description: string): Promise<GeneratedAgentSpec> {
+  const response = await fetch(`${apiBase}/api/v1/agents/generate-spec`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ description }),
+  });
+  if (!response.ok) return readError(response, "無法產生 Agent 規格。");
+  return (await response.json()) as GeneratedAgentSpec;
+}
+
+export async function createAgent(input: {
+  code: string;
+  name: string;
+  department: string;
+  system_prompt: string;
+  routing_description: string;
+  visibility_scope: "PRIVATE" | "DEPARTMENT" | "GLOBAL";
+  reports_to_code: string | null;
+  bound_local_mount_id: string | null;
+  allowed_tool_namespaces: string[];
+}): Promise<WorkspaceAgent> {
+  const response = await fetch(`${apiBase}/api/v1/agents`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) return readError(response, "無法建立 Agent。");
+  return (await response.json()) as WorkspaceAgent;
+}
+
+export async function patchAgent(
+  code: string,
+  input: { is_enabled?: boolean; name?: string; system_prompt?: string },
+): Promise<WorkspaceAgent> {
+  const response = await fetch(`${apiBase}/api/v1/agents/${code}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) return readError(response, "無法更新 Agent。");
+  return (await response.json()) as WorkspaceAgent;
+}
+
+export async function deleteWorkspaceAgent(code: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/agents/${code}`, { method: "DELETE", headers: headers() });
+  if (!response.ok) return readError(response, "無法刪除 Agent。");
+}
+
+export async function resetPresetAgents(code?: string): Promise<{ restored: string[] }> {
+  const response = await fetch(`${apiBase}/api/v1/agents/presets/reset`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(code ? { code } : {}),
+  });
+  if (!response.ok) return readError(response, "無法還原預設 Agent。");
+  return (await response.json()) as { restored: string[] };
+}
+
+export async function clearMemories(roleCode?: string): Promise<number> {
+  const query = roleCode ? `?role_code=${encodeURIComponent(roleCode)}` : "";
+  const response = await fetch(`${apiBase}/api/v1/memories${query}`, { method: "DELETE", headers: headers() });
+  if (!response.ok) return readError(response, "無法清理記憶。");
+  const body = (await response.json()) as { deleted: number };
+  return body.deleted;
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/chat/sessions/${sessionId}`, { method: "DELETE", headers: headers() });
+  if (!response.ok) return readError(response, "無法刪除對話工作階段。");
+}
+

@@ -549,6 +549,7 @@ class AgentMemory(Base):
     )
     department: Mapped[str | None] = mapped_column(String(100))
     session_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    role_code: Mapped[str | None] = mapped_column(String(64))
     source_reference: Mapped[str | None] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
@@ -630,3 +631,30 @@ class SecurityAuditLog(Base):
     resource: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime | None] = _created_at()
+
+
+class UserAgentConfig(Base):
+    """Per-user enablement and removal of a shared or custom agent. Implements: ADR-0003."""
+
+    __tablename__ = "user_agent_configs"
+    __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_user_agent_configs_user_role"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    is_removed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    name_override: Mapped[str | None] = mapped_column(String(120))
+    system_prompt_override: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )

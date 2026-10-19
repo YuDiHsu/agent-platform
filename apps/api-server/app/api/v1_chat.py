@@ -33,6 +33,7 @@ from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.runtime import spawn
 from app.orchestrator.supervisor import ChatTurn
+from app.workspace.roster import display_name, workspace_roles
 
 router = APIRouter()
 
@@ -155,8 +156,8 @@ async def bootstrap(user: CurrentUser = Depends(require_user)) -> dict[str, Any]
         mounts = (
             await db.scalars(select(LocalWorkspaceMount).where(LocalWorkspaceMount.user_id == user.id))
         ).all()
-        roles = (await db.scalars(select(AgentRole).where(AgentRole.is_active.is_not(False)))).all()
-        role_by_id = {role.id: role for role in roles}
+        roster = await workspace_roles(db, user.id)
+        role_by_id = {role.id: role for role, _config in roster}
         preferences = (
             await db.execute(
                 select(ToolRegistry.code, UserToolPreference.is_enabled)
@@ -199,13 +200,13 @@ async def bootstrap(user: CurrentUser = Depends(require_user)) -> dict[str, Any]
             "agents": [
                 {
                     "code": role.code,
-                    "name": role.name,
+                    "name": display_name(role, config),
                     "reports_to_code": None
                     if role.reports_to_id is None or role.reports_to_id not in role_by_id
                     else role_by_id[role.reports_to_id].code,
-                    "is_enabled": True,
+                    "is_enabled": True if config is None else config.is_enabled,
                 }
-                for role in roles
+                for role, config in roster
             ],
             "tool_preferences": [
                 {"code": code, "is_enabled": enabled} for code, enabled in preferences

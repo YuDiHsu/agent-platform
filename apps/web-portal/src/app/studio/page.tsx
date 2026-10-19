@@ -2,23 +2,31 @@
 
 import { useEffect, useState } from "react";
 
+import { AgentWizard } from "@/components/studio/AgentWizard";
 import { OnionInspector } from "@/components/studio/OnionInspector";
 import { RuleBindingSelector } from "@/components/studio/RuleBindingSelector";
 import { SkillEditorModal } from "@/components/studio/SkillEditorModal";
 import {
   bindRule,
   bindSkill,
+  clearMemories,
   currentUserId,
+  deleteChatSession,
+  deleteWorkspaceAgent,
   fetchOnion,
   fetchRoleRules,
   fetchRules,
   fetchSkills,
+  fetchWorkspaceAgents,
+  patchAgent,
+  resetPresetAgents,
   unbindRule,
   saveSkill,
   tryRole,
   type CatalogRule,
   type CatalogSkill,
   type PromptLayer,
+  type WorkspaceAgent,
 } from "@/lib/api";
 
 const ROLES = ["ORCH", "CEO", "PM", "FIN", "SA", "ARCH", "SE"];
@@ -35,6 +43,13 @@ export default function StudioPage() {
   const [trial, setTrial] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
+  const [agents, setAgents] = useState<WorkspaceAgent[]>([]);
+  const [memoryRole, setMemoryRole] = useState("PM");
+  const [sessionToDelete, setSessionToDelete] = useState("");
+
+  async function loadAgents() {
+    setAgents(await fetchWorkspaceAgents());
+  }
 
   async function loadPreview(nextRole = roleCode) {
     const onion = await fetchOnion(nextRole);
@@ -55,7 +70,7 @@ export default function StudioPage() {
     if (!signedIn) return;
     void (async () => {
       try {
-        const [nextRules, nextSkills] = await Promise.all([fetchRules(), fetchSkills()]);
+        const [nextRules, nextSkills] = await Promise.all([fetchRules(), fetchSkills(), loadAgents()]);
         setRules(nextRules);
         setSkills(nextSkills);
         await Promise.all([loadBindings("SA"), loadPreview("SA")]);
@@ -77,6 +92,64 @@ export default function StudioPage() {
   return (
     <section className="studio-page">
       <h1>自建工作坊</h1>
+      <section className="studio-block">
+        <h2>我的 Agent</h2>
+        <ul className="roster">
+          {agents.map((agent) => (
+            <li key={agent.code}>
+              <span>
+                {agent.name} · {agent.code}
+                {agent.approval_status === "PENDING_REVIEW" ? " · 審核中" : ""}
+              </span>
+              <button type="button" className="ghost" onClick={() => void patchAgent(agent.code, { is_enabled: !agent.is_enabled }).then(loadAgents)}>
+                {agent.is_enabled ? "關閉" : "開啟"}
+              </button>
+              <button type="button" className="ghost" onClick={() => void deleteWorkspaceAgent(agent.code).then(loadAgents)}>
+                刪除
+              </button>
+              {agent.is_preset ? (
+                <button type="button" className="ghost" onClick={() => void resetPresetAgents(agent.code).then(loadAgents)}>
+                  還原
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <button type="button" className="text-button primary" onClick={() => void resetPresetAgents().then(loadAgents)}>
+          還原系統預設 Agent
+        </button>
+        <div className="memory-controls">
+          <label>
+            清理角色記憶
+            <select value={memoryRole} onChange={(event) => setMemoryRole(event.target.value)}>
+              {agents.map((agent) => (
+                <option key={agent.code} value={agent.code}>
+                  {agent.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="ghost" onClick={() => void clearMemories(memoryRole)}>
+            清理此角色記憶
+          </button>
+          <label>
+            刪除對話工作階段
+            <input value={sessionToDelete} onChange={(event) => setSessionToDelete(event.target.value)} placeholder="session id" />
+          </label>
+          <button
+            type="button"
+            className="ghost"
+            disabled={sessionToDelete.trim().length === 0}
+            onClick={() => void deleteChatSession(sessionToDelete.trim()).then(() => setSessionToDelete(""))}
+          >
+            刪除對話與暫時切片
+          </button>
+          <button type="button" className="ghost" onClick={() => void clearMemories()}>
+            清理個人記憶
+          </button>
+        </div>
+      </section>
+      <AgentWizard agents={agents} rules={rules} skills={skills} onCreated={loadAgents} />
       <div className="studio-grid">
         <div>
           <label>
@@ -91,7 +164,7 @@ export default function StudioPage() {
                 });
               }}
             >
-              {ROLES.map((code) => (
+              {(agents.length > 0 ? agents.map((agent) => agent.code) : ROLES).map((code) => (
                 <option key={code} value={code}>
                   {code}
                 </option>
