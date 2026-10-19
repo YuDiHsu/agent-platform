@@ -1,0 +1,87 @@
+version: "1.0"
+tools:
+  - code: o365_search_messages
+    namespace: o365_mail
+    name: 搜尋郵件
+    description: 以關鍵字搜尋目前使用者的 Outlook 信件。
+    action_tier: READ
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        query: {type: string}
+  - code: o365_create_draft
+    namespace: o365_mail
+    name: 建立郵件草稿
+    description: 建立一封尚未寄出的 Outlook 草稿。
+    action_tier: DRAFT
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        subject: {type: string}
+        body: {type: string}
+  - code: o365_send_mail
+    namespace: o365_mail
+    name: 寄出郵件
+    description: 代表使用者寄出 Outlook 郵件。
+    action_tier: COMMIT
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        to: {type: array}
+        subject: {type: string}
+  - code: teams_send_message
+    namespace: teams
+    name: 傳送 Teams 訊息
+    description: 在 Teams 頻道或聊天送出訊息。
+    action_tier: COMMIT
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        channel: {type: string}
+        text: {type: string}
+  - code: slack_post_message
+    namespace: slack
+    name: 張貼 Slack 訊息
+    description: 在 Slack 頻道張貼訊息。
+    action_tier: COMMIT
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        channel: {type: string}
+        text: {type: string}
+  - code: workspace_read_file
+    namespace: workspace
+    name: 讀取工作區檔案
+    description: 讀取使用者已掛載工作區中的檔案。
+    action_tier: READ
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        path: {type: string}
+  - code: TOOL_FIN_LEDGER
+    namespace: finance
+    name: 查詢財務分類帳
+    description: 查詢財務角色專用的分類帳科目。
+    action_tier: READ
+    scope_type: ROLE_SCOPED
+    bound_role_codes: [FIN]
+    input_json_schema:
+      type: object
+      properties:
+        account: {type: string}
+  - code: TOOL_HIDDEN_GUARDRAIL
+    namespace: platform
+    name: 底層工具守則
+    description: 隱藏工具守則 HIDDEN-TOOL-GUARD-19。遇越權工具呼叫時強制套用。
+    action_tier: READ
+    scope_type: COMMON_DEFAULT
+    is_visible_to_user: false
+    input_json_schema:
+      type: object
+      properties: {}

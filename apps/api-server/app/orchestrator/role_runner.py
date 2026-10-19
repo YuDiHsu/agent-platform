@@ -12,7 +12,6 @@ from app.db.models import ChatSession, HitlApprovalRequest, TaskTicket, User
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.artifact_manager import store_artifact
-from app.orchestrator.prompt_compiler import PromptCompiler
 from app.orchestrator.state import ArtifactPointer, SubAgentExecutionOutput
 
 def _activated_skill(output: SubAgentExecutionOutput) -> str | None:
@@ -70,7 +69,12 @@ class RoleRunner:
     ) -> StepOutcome:
         """Call the model only after the database session has been closed."""
 
-        prompt = await self._system_prompt(role_code=role_code, user_id=user_id, session_id=chat_session_id)
+        prompt = await self._system_prompt(
+            role_code=role_code,
+            user_id=user_id,
+            session_id=chat_session_id,
+            query=original_query,
+        )
         activated: dict[str, str] | None = None
         try:
             output = await self._llm.generate_structured(
@@ -88,7 +92,12 @@ class RoleRunner:
                 assert skill_code is not None
                 await self._remember_skill(chat_session_id, role_code, skill_code)
                 activated = {"role_code": role_code, "skill_code": skill_code}
-                prompt = await self._system_prompt(role_code=role_code, user_id=user_id, session_id=chat_session_id)
+                prompt = await self._system_prompt(
+                    role_code=role_code,
+                    user_id=user_id,
+                    session_id=chat_session_id,
+                    query=original_query,
+                )
                 output = await self._llm.generate_structured(
                     system_prompt=prompt,
                     messages=[
@@ -217,11 +226,14 @@ class RoleRunner:
             }
         return StepOutcome(kind="hibernated", wait_status=status, hitl=hitl, detail=call.tool_name)
 
-    async def _system_prompt(self, *, role_code: str, user_id: UUID, session_id: UUID) -> str:
+    async def _system_prompt(self, *, role_code: str, user_id: UUID, session_id: UUID, query: str) -> str:
         from sqlalchemy import select
 
         from app.db.models import AgentRole
+        from app.llm.embedding_client import EmbeddingClient
+        from app.orchestrator.tool_rag import compile_role_turn
 
+        query_embedding = await EmbeddingClient().embed_text(query)
         async with database_session() as db:
             role = await db.scalar(select(AgentRole).where(AgentRole.code == role_code))
             user = await db.get(User, user_id)
@@ -232,8 +244,14 @@ class RoleRunner:
             if chat is not None and chat.checkpoint:
                 raw = chat.checkpoint.get("activated_skills", {}).get(role_code, [])
                 activated = [str(item) for item in raw]
-            compiled = await PromptCompiler().compile_for_role(db, role, user.department, activated)
-            return compiled.system_prompt
+            return await compile_role_turn(
+                db,
+                role=role,
+                user_id=user_id,
+                user_department=user.department,
+                query_embedding=query_embedding,
+                activated_skill_codes=activated,
+            )
 
     async def _remember_skill(self, session_id: UUID, role_code: str, skill_code: str) -> None:
         async with database_session() as db:

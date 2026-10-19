@@ -183,6 +183,10 @@ button:disabled, .text-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .layer-5 { border-left-color: #8a6232; }
 .layer-6 { border-left-color: var(--danger); }
 .chip-list, .check-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.tool-list { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
+.tool-list .check-row { align-items: flex-start; }
+.tool-list .check-row span { display: grid; }
+.muted { color: var(--muted); font-size: 0.85rem; }
 .locked-chip { background: var(--paper-deep); border-radius: 999px; padding: 0.2rem 0.6rem; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(28, 25, 21, 0.45); display: grid; place-items: center; }
 .modal-card { width: min(32rem, calc(100% - 2rem)); display: grid; gap: 0.75rem; }

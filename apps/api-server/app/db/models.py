@@ -420,6 +420,91 @@ class CliExecutionLog(Base):
     )
 
 
+class ToolRegistry(Base):
+    __tablename__ = "tools_registry"
+    __table_args__ = (
+        Index(
+            "idx_tools_routing_vec",
+            "routing_embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"routing_embedding": "vector_cosine_ops"},
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    namespace: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    input_json_schema: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+    action_tier: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'READ'"))
+    execution_target: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        server_default=text("'SERVER_MCP'"),
+    )
+    adapter_type: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        server_default=text("'BUILTIN'"),
+    )
+    endpoint_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    scope_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'COMMON_DEFAULT'"),
+    )
+    is_visible_to_user: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("10"))
+    routing_embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text("true"))
+    created_at: Mapped[datetime | None] = _created_at()
+
+
+class AgentRoleTool(Base):
+    __tablename__ = "agent_role_tools"
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tools_registry.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime | None] = _created_at()
+
+
+class UserToolPreference(Base):
+    __tablename__ = "user_tool_preferences"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tool_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tools_registry.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
 class UserConnectorToken(Base):
     __tablename__ = "user_connector_tokens"
     __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_connector_tokens_user_provider"),)

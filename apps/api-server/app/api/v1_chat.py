@@ -25,7 +25,9 @@ from app.db.models import (
     SharedArtifact,
     SkillRegistry,
     TaskTicket,
+    ToolRegistry,
     User,
+    UserToolPreference,
 )
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
@@ -155,6 +157,13 @@ async def bootstrap(user: CurrentUser = Depends(require_user)) -> dict[str, Any]
         ).all()
         roles = (await db.scalars(select(AgentRole).where(AgentRole.is_active.is_not(False)))).all()
         role_by_id = {role.id: role for role in roles}
+        preferences = (
+            await db.execute(
+                select(ToolRegistry.code, UserToolPreference.is_enabled)
+                .join(UserToolPreference, UserToolPreference.tool_id == ToolRegistry.id)
+                .where(UserToolPreference.user_id == user.id)
+            )
+        ).all()
         return {
             "user": _user_out(user).model_dump(),
             "sessions": [
@@ -188,7 +197,9 @@ async def bootstrap(user: CurrentUser = Depends(require_user)) -> dict[str, Any]
                 }
                 for role in roles
             ],
-            "tool_preferences": [],
+            "tool_preferences": [
+                {"code": code, "is_enabled": enabled} for code, enabled in preferences
+            ],
         }
 
 

@@ -11,12 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import REPO_ROOT
 from app.db.catalog import read_builtin_catalog
-from app.db.models import AgentRole, AgentRoleRule, AgentRoleSkill, RuleRegistry, SkillRegistry
+from app.db.models import (
+    AgentRole,
+    AgentRoleRule,
+    AgentRoleSkill,
+    AgentRoleTool,
+    RuleRegistry,
+    SkillRegistry,
+    ToolRegistry,
+)
 from app.llm.embedding_client import EmbeddingClient
 
 ROLES_PATH = REPO_ROOT / "packages" / "builtin-roles" / "seed_roles.yaml"
 RULES_PATH = REPO_ROOT / "packages" / "builtin-skills-rules" / "seed_rules.yaml"
 SKILLS_PATH = REPO_ROOT / "packages" / "builtin-skills-rules" / "seed_skills.yaml"
+TOOLS_PATH = REPO_ROOT / "packages" / "builtin-skills-rules" / "seed_tools.yaml"
 
 
 @dataclass(frozen=True)
@@ -49,16 +58,21 @@ class SeedRunner:
         roles_path: Path = ROLES_PATH,
         rules_path: Path = RULES_PATH,
         skills_path: Path = SKILLS_PATH,
+        tools_path: Path = TOOLS_PATH,
     ) -> SeedSummary:
         role_docs = list(_load_yaml(roles_path)["roles"])
         rule_docs = list(_load_yaml(rules_path)["rules"])
         skill_docs = list(_load_yaml(skills_path)["skills"])
+        tool_docs = list(_load_yaml(tools_path)["tools"])
 
         role_vectors = await self._embedder.embed_texts(
             [_clean(str(doc["routing_description"])) for doc in role_docs]
         )
         skill_vectors = await self._embedder.embed_texts(
             [_clean(str(doc["trigger_description"])) for doc in skill_docs]
+        )
+        tool_vectors = await self._embedder.embed_texts(
+            [_clean(str(doc["description"])) for doc in tool_docs]
         )
 
         code_to_role: dict[str, AgentRole] = {}
@@ -97,6 +111,19 @@ class SeedRunner:
                     insert(AgentRoleSkill)
                     .values(role_id=role.id, skill_id=skill.id, auto_activate=False)
                     .on_conflict_do_nothing(index_elements=["role_id", "skill_id"])
+                )
+        code_to_tool: dict[str, ToolRegistry] = {}
+        for doc, vector in zip(tool_docs, tool_vectors, strict=True):
+            code_to_tool[str(doc["code"])] = await self._upsert_tool(doc, vector)
+        await self._session.flush()
+        for doc in tool_docs:
+            tool = code_to_tool[str(doc["code"])]
+            for role_code in doc.get("bound_role_codes", []):
+                role = code_to_role[str(role_code)]
+                await self._session.execute(
+                    insert(AgentRoleTool)
+                    .values(role_id=role.id, tool_id=tool.id)
+                    .on_conflict_do_nothing(index_elements=["role_id", "tool_id"])
                 )
         await self._session.commit()
         catalog = await read_builtin_catalog(self._session)
@@ -175,6 +202,32 @@ class SeedRunner:
             skill = SkillRegistry(code=code, **fields)
             self._session.add(skill)
             return skill
+        for key, value in fields.items():
+            setattr(existing, key, value)
+        return existing
+
+    async def _upsert_tool(self, doc: dict[str, Any], embedding: list[float]) -> ToolRegistry:
+        code = str(doc["code"])
+        existing = await self._session.scalar(select(ToolRegistry).where(ToolRegistry.code == code))
+        fields = {
+            "namespace": str(doc["namespace"]),
+            "name": str(doc["name"]),
+            "description": _clean(str(doc["description"])),
+            "input_json_schema": dict(doc.get("input_json_schema", {})),
+            "action_tier": str(doc.get("action_tier", "READ")),
+            "execution_target": str(doc.get("execution_target", "SERVER_MCP")),
+            "adapter_type": str(doc.get("adapter_type", "BUILTIN")),
+            "endpoint_config": doc.get("endpoint_config"),
+            "scope_type": str(doc.get("scope_type", "COMMON_DEFAULT")),
+            "is_visible_to_user": bool(doc.get("is_visible_to_user", True)),
+            "timeout_seconds": int(doc.get("timeout_seconds", 10)),
+            "routing_embedding": embedding,
+            "is_active": True,
+        }
+        if existing is None:
+            tool = ToolRegistry(code=code, **fields)
+            self._session.add(tool)
+            return tool
         for key, value in fields.items():
             setattr(existing, key, value)
         return existing

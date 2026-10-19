@@ -23,11 +23,15 @@ EXPECTED_TABLES = {
     "cli_execution_logs",
     "user_connector_tokens",
     "agent_memories",
+    "tools_registry",
+    "agent_role_tools",
+    "user_tool_preferences",
 }
 HNSW_INDEXES = {
     "idx_agent_roles_embedding",
     "idx_skills_trigger_vec",
     "idx_agent_memories_vec",
+    "idx_tools_routing_vec",
 }
 
 

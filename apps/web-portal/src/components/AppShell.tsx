@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Menu, MessageSquare, Moon, PanelRight, Sun } from "lucide-react";
+import { Building2, Menu, MessageSquare, Moon, PanelRight, Plug, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -76,9 +76,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         自建工作坊
       </Link>
-      <button type="button" className="nav-link" aria-disabled="true" disabled>
-        連接器與排程（稍後提供）
-      </button>
+      <Link
+        className="nav-link"
+        href="/connectors"
+        aria-current={pathname.startsWith("/connectors") ? "page" : undefined}
+        onClick={() => setNavOpen(false)}
+      >
+        <Plug size={18} aria-hidden="true" /> 工具與連接器
+      </Link>
     </nav>
   );
 

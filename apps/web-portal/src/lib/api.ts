@@ -235,3 +235,28 @@ export async function tryRole(roleCode: string, message: string): Promise<{ prom
   return (await response.json()) as { prompt: string; model_output: unknown; inference_error: string | null };
 }
 
+export interface CatalogTool {
+  code: string;
+  namespace: string;
+  name: string;
+  description: string;
+  action_tier: string;
+  scope_type: string;
+  is_enabled: boolean;
+}
+
+export async function fetchTools(): Promise<CatalogTool[]> {
+  const response = await fetch(`${apiBase}/api/v1/tools`, { headers: headers() });
+  if (!response.ok) throw new Error("無法讀取工具。");
+  return (await response.json()) as CatalogTool[];
+}
+
+export async function setToolPreference(code: string, isEnabled: boolean): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/users/me/tool-preferences`, {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ code, is_enabled: isEnabled }),
+  });
+  if (!response.ok) throw new Error("無法更新工具開關。");
+}
+
