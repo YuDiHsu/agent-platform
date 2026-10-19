@@ -42,6 +42,8 @@ async def test_sa_prompt_keeps_company_rules_and_drops_other_roles() -> None:
     assert "RD-DEPT-ONLY-44" in prompt
     assert prompt.index("HIDDEN-RADIX-77") < prompt.index("【角色核心職責 SA】")
     assert prompt.index("【角色核心職責 SA】") < prompt.index("RULE_SA_OPENAPI_AND_ERD")
+    assert "HIDDEN-SKILL-SOP-88" in prompt
+    assert "HIDDEN-SKILL-SOP-88" not in compiled.prefix_through_layer_4
     assert "HIDDEN-RADIX-77" not in preview
     assert "HIDDEN-SKILL-SOP-88" not in preview
 
@@ -73,6 +75,37 @@ async def test_same_department_shares_layers_until_the_tool_tail() -> None:
     assert "tool_five" in second.system_prompt
 
 
+async def test_pending_department_rule_is_not_compiled() -> None:
+    async with get_session_factory()() as session:
+        await SeedRunner(session, EmbeddingClient()).run()
+        session.add(
+            RuleRegistry(
+                code="RULE_RD_PENDING",
+                name="尚未核准的部門規範",
+                scope_type="DEPARTMENT_SHARED",
+                department="RD",
+                priority=10,
+                rule_content_markdown="PENDING-DEPT-SHOULD-NOT-LEAK",
+                is_visible_to_user=True,
+                approval_status="PENDING_REVIEW",
+                is_active=True,
+            )
+        )
+        await session.commit()
+        role = await session.scalar(select(AgentRole).where(AgentRole.code == "SA"))
+        assert role is not None
+        compiled = await PromptCompiler().compile_for_role(session, role, "RD")
+        await session.execute(RuleRegistry.__table__.delete().where(RuleRegistry.code == "RULE_RD_PENDING"))
+        await session.commit()
+
+    assert "PENDING-DEPT-SHOULD-NOT-LEAK" not in compiled.system_prompt
+
+
+def _estimated_tokens(text: str) -> int:
+    """Conservative stand-in for a tokenizer: CJK costs two tokens, ASCII costs one."""
+    return sum(2 if ord(char) > 127 else 1 for char in text)
+
+
 async def test_standby_skill_stays_short_until_activation() -> None:
     long_trigger = "很長的觸發說明" * 20
     from app.db.models import SkillRegistry
@@ -99,8 +132,10 @@ async def test_standby_skill_stays_short_until_activation() -> None:
     assert "fin_calculator.py" not in catalog
     for line in catalog.splitlines():
         if line.startswith("SKILL_"):
-            assert len(line) < 60
+            assert _estimated_tokens(line) < 60
     assert long_trigger[:80] not in catalog
     assert "fin_calculator.py" in active.system_prompt
     assert active.prefix_through_layer_4 == waiting.prefix_through_layer_4
-    assert len(stage_one_manifest("SKILL_X", "名稱", long_trigger)) < 60
+    fitted = stage_one_manifest("SKILL_X", "名稱", long_trigger)
+    assert _estimated_tokens(fitted) < 60
+    assert long_trigger not in fitted

@@ -87,7 +87,7 @@ def _reject_hidden_create(user: CurrentUser, visible: bool) -> None:
 async def list_rules(user: CurrentUser = Depends(require_user)) -> list[dict[str, Any]]:
     async with database_session() as db:
         rows = (await db.scalars(select(RuleRegistry).order_by(RuleRegistry.priority, RuleRegistry.code))).all()
-        return [_rule_out(row) for row in rows if user.is_admin or row.is_visible_to_user]
+        return [_rule_out(row) for row in rows if _catalog_visible(row, user)]
 
 
 @router.post("/rules", status_code=201)
@@ -143,6 +143,21 @@ async def unbind_rule(role_code: str, rule_code: str, user: CurrentUser = Depend
         )
 
 
+@router.get("/roles/{role_code}/rules")
+async def list_bound_rules(role_code: str, user: CurrentUser = Depends(require_user)) -> list[dict[str, Any]]:
+    async with database_session() as db:
+        role = await _role(db, role_code)
+        rows = (
+            await db.scalars(
+                select(RuleRegistry)
+                .join(AgentRoleRule, AgentRoleRule.rule_id == RuleRegistry.id)
+                .where(AgentRoleRule.role_id == role.id)
+                .order_by(RuleRegistry.priority, RuleRegistry.code)
+            )
+        ).all()
+        return [_rule_out(row) for row in rows if _catalog_visible(row, user)]
+
+
 @router.put("/roles/{role_code}/rules/{rule_code}", status_code=204)
 async def bind_rule(role_code: str, rule_code: str, user: CurrentUser = Depends(require_user)) -> None:
     async with database_session() as db:
@@ -159,7 +174,7 @@ async def bind_rule(role_code: str, rule_code: str, user: CurrentUser = Depends(
 async def list_skills(user: CurrentUser = Depends(require_user)) -> list[dict[str, Any]]:
     async with database_session() as db:
         rows = (await db.scalars(select(SkillRegistry).order_by(SkillRegistry.code))).all()
-        return [_skill_out(row) for row in rows if user.is_admin or row.is_visible_to_user]
+        return [_skill_out(row) for row in rows if _catalog_visible(row, user)]
 
 
 @router.post("/skills", status_code=201)
@@ -321,6 +336,12 @@ async def try_prompt(
         model_output = None
         inference_error = str(exc)
     return {"prompt": prompt, "model_output": model_output, "inference_error": inference_error}
+
+
+def _catalog_visible(row: RuleRegistry | SkillRegistry, user: CurrentUser) -> bool:
+    if user.is_admin:
+        return True
+    return bool(row.is_visible_to_user) and row.approval_status == "APPROVED"
 
 
 def _rule_out(rule: RuleRegistry) -> dict[str, Any]:

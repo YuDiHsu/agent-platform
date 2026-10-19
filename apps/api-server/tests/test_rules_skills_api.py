@@ -53,7 +53,15 @@ async def test_user_catalog_hides_system_rules_and_blocks_unbinding(client: http
     body = preview.json()["prompt"]
     assert "RULE_SA_OPENAPI_AND_ERD" in body
     assert "HIDDEN-RADIX-77" not in body
+    assert "HIDDEN-SKILL-SOP-88" not in body
     assert "RULE_FIN_TWD_THREE_SCENARIOS" not in body
+
+    bound = await client.get("/api/v1/roles/SA/rules", headers=headers)
+    assert bound.status_code == 200
+    bound_codes = {row["code"] for row in bound.json()}
+    assert "RULE_SA_OPENAPI_AND_ERD" in bound_codes
+    assert "RULE_FIN_TWD_THREE_SCENARIOS" not in bound_codes
+    assert "RULE_HIDDEN_RADIX_PREFIX" not in bound_codes
 
 
 async def test_admin_can_see_hidden_rule_and_activation_emits_sse(client: httpx.AsyncClient) -> None:
@@ -76,3 +84,30 @@ async def test_admin_can_see_hidden_rule_and_activation_emits_sse(client: httpx.
 
     preview = await client.get("/api/v1/studio/roles/SA/prompt", headers=headers)
     assert "validate_openapi.py" in preview.json()["prompt"]
+
+
+async def test_unapproved_department_rule_stays_out_of_the_catalog(client: httpx.AsyncClient) -> None:
+    headers = await _login(client, "studio-pending@example.com")
+    created = await client.post(
+        "/api/v1/rules",
+        headers=headers,
+        json={
+            "code": "RULE_RD_PENDING_API",
+            "name": "待審部門規範",
+            "scope_type": "DEPARTMENT_SHARED",
+            "department": "RD",
+            "rule_content_markdown": "PENDING-API-SHOULD-NOT-LEAK",
+        },
+    )
+    assert created.status_code == 201
+    try:
+        listed = (await client.get("/api/v1/rules", headers=headers)).json()
+        assert "RULE_RD_PENDING_API" not in {row["code"] for row in listed}
+        preview = await client.get("/api/v1/studio/roles/SA/prompt", headers=headers)
+        assert "PENDING-API-SHOULD-NOT-LEAK" not in preview.json()["prompt"]
+    finally:
+        from app.db.models import RuleRegistry
+
+        async with get_session_factory()() as session:
+            await session.execute(RuleRegistry.__table__.delete().where(RuleRegistry.code == "RULE_RD_PENDING_API"))
+            await session.commit()

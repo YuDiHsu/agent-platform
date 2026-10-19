@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import AgentRole, AgentRoleRule, AgentRoleSkill, RuleRegistry, SkillRegistry
 
 LAYER_JOIN = "\n\n---\n\n"
-CATALOG_LINE_LIMIT = 59
+CATALOG_TOKEN_BUDGET = 59
 
 
 @dataclass(frozen=True)
@@ -64,18 +64,38 @@ def _join(segments: tuple[PromptSegment, ...], *, preview: bool) -> str:
     return LAYER_JOIN.join(part for part in parts if part)
 
 
+def _token_cost(char: str) -> int:
+    return 2 if ord(char) > 127 else 1
+
+
+def _fit(text: str, budget: int) -> str:
+    kept: list[str] = []
+    used = 0
+    for char in text:
+        cost = _token_cost(char)
+        if used + cost > budget:
+            break
+        kept.append(char)
+        used += cost
+    return "".join(kept)
+
+
 def stage_one_manifest(code: str, name: str, trigger: str) -> str:
-    """Keep one standby skill under 60 tokens by staying under 60 characters."""
+    """Keep one standby skill under 60 tokens. CJK counts as two, ASCII as one."""
     summary = " ".join(trigger.split())
     prefix = f"{code} {name}: "
-    room = CATALOG_LINE_LIMIT - len(prefix)
-    if room <= 0:
-        return prefix[:CATALOG_LINE_LIMIT]
-    return prefix + summary[:room]
+    prefix_cost = sum(_token_cost(char) for char in prefix)
+    if prefix_cost >= CATALOG_TOKEN_BUDGET:
+        return _fit(prefix, CATALOG_TOKEN_BUDGET)
+    return prefix + _fit(summary, CATALOG_TOKEN_BUDGET - prefix_cost)
 
 
 def _active(column: Any) -> Any:
     return or_(column.is_(True), column.is_(None))
+
+
+def _approved(column: Any) -> Any:
+    return column == "APPROVED"
 
 
 class PromptCompiler:
@@ -109,7 +129,11 @@ class PromptCompiler:
         global_rules = (
             await db.scalars(
                 select(RuleRegistry)
-                .where(_active(RuleRegistry.is_active), RuleRegistry.scope_type == "GLOBAL_MANDATORY")
+                .where(
+                    _active(RuleRegistry.is_active),
+                    _approved(RuleRegistry.approval_status),
+                    RuleRegistry.scope_type == "GLOBAL_MANDATORY",
+                )
                 .order_by(RuleRegistry.priority.asc(), RuleRegistry.code.asc())
             )
         ).all()
@@ -118,6 +142,7 @@ class PromptCompiler:
                 select(RuleRegistry)
                 .where(
                     _active(RuleRegistry.is_active),
+                    _approved(RuleRegistry.approval_status),
                     RuleRegistry.scope_type == "DEPARTMENT_SHARED",
                     RuleRegistry.department == user_department,
                 )
@@ -134,6 +159,7 @@ class PromptCompiler:
                 .where(
                     AgentRoleRule.role_id == role.id,
                     _active(RuleRegistry.is_active),
+                    _approved(RuleRegistry.approval_status),
                     RuleRegistry.scope_type == "ROLE_EXCLUSIVE",
                 )
                 .order_by(RuleRegistry.priority.asc(), RuleRegistry.code.asc())
@@ -146,7 +172,11 @@ class PromptCompiler:
             await db.execute(
                 select(SkillRegistry, AgentRoleSkill.auto_activate)
                 .join(AgentRoleSkill, AgentRoleSkill.skill_id == SkillRegistry.id)
-                .where(AgentRoleSkill.role_id == role.id, _active(SkillRegistry.is_active))
+                .where(
+                    AgentRoleSkill.role_id == role.id,
+                    _active(SkillRegistry.is_active),
+                    _approved(SkillRegistry.approval_status),
+                )
                 .order_by(SkillRegistry.code.asc())
             )
         ).all()
@@ -170,7 +200,7 @@ class PromptCompiler:
             )
         ]
         for skill, auto_activate in rows:
-            if auto_activate or skill.code in activated:
+            if auto_activate or skill.code in activated or not skill.is_visible_to_user:
                 segments.append(_sop_segment(skill))
         return segments
 

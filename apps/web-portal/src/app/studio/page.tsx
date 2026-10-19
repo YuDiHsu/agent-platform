@@ -6,11 +6,14 @@ import { OnionInspector } from "@/components/studio/OnionInspector";
 import { RuleBindingSelector } from "@/components/studio/RuleBindingSelector";
 import { SkillEditorModal } from "@/components/studio/SkillEditorModal";
 import {
+  bindRule,
   bindSkill,
   currentUserId,
   fetchOnion,
+  fetchRoleRules,
   fetchRules,
   fetchSkills,
+  unbindRule,
   saveSkill,
   tryRole,
   type CatalogRule,
@@ -39,6 +42,11 @@ export default function StudioPage() {
     setPrompt(onion.prompt);
   }
 
+  async function loadBindings(nextRole: string) {
+    const bound = await fetchRoleRules(nextRole);
+    setSelectedRules(bound.filter((rule) => rule.scope_type === "ROLE_EXCLUSIVE").map((rule) => rule.code));
+  }
+
   useEffect(() => {
     setSignedIn(currentUserId() !== null);
   }, []);
@@ -50,8 +58,7 @@ export default function StudioPage() {
         const [nextRules, nextSkills] = await Promise.all([fetchRules(), fetchSkills()]);
         setRules(nextRules);
         setSkills(nextSkills);
-        setSelectedRules(nextRules.filter((rule) => rule.scope_type === "ROLE_EXCLUSIVE" && rule.code.includes("SA")).map((rule) => rule.code));
-        await loadPreview("SA");
+        await Promise.all([loadBindings("SA"), loadPreview("SA")]);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "無法載入工作坊。");
       }
@@ -79,7 +86,7 @@ export default function StudioPage() {
               onChange={(event) => {
                 const next = event.target.value;
                 setRoleCode(next);
-                void loadPreview(next).catch((caught: unknown) => {
+                void Promise.all([loadBindings(next), loadPreview(next)]).catch((caught: unknown) => {
                   setError(caught instanceof Error ? caught.message : "無法編譯提示詞。");
                 });
               }}
@@ -95,9 +102,13 @@ export default function StudioPage() {
             rules={rules}
             selected={selectedRules}
             onToggle={(code) => {
-              setSelectedRules((current) =>
-                current.includes(code) ? current.filter((item) => item !== code) : [...current, code],
-              );
+              const bound = selectedRules.includes(code);
+              const request = bound ? unbindRule(roleCode, code) : bindRule(roleCode, code);
+              void request
+                .then(() => Promise.all([loadBindings(roleCode), loadPreview(roleCode)]))
+                .catch((caught: unknown) => {
+                  setError(caught instanceof Error ? caught.message : "無法更新規範綁定。");
+                });
             }}
           />
           <h2>技能</h2>

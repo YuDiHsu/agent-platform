@@ -189,6 +189,28 @@ export async function saveSkill(input: {
   if (!response.ok) throw new Error("無法建立技能。");
 }
 
+export async function fetchRoleRules(roleCode: string): Promise<CatalogRule[]> {
+  const response = await fetch(`${apiBase}/api/v1/roles/${roleCode}/rules`, { headers: headers() });
+  if (!response.ok) throw new Error("無法讀取角色規範綁定。");
+  return (await response.json()) as CatalogRule[];
+}
+
+export async function bindRule(roleCode: string, ruleCode: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/roles/${roleCode}/rules/${ruleCode}`, {
+    method: "PUT",
+    headers: headers(),
+  });
+  if (!response.ok) throw new Error("無法綁定規範。");
+}
+
+export async function unbindRule(roleCode: string, ruleCode: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/roles/${roleCode}/rules/${ruleCode}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!response.ok) throw new Error("無法解除規範綁定。");
+}
+
 export async function bindSkill(roleCode: string, skillCode: string): Promise<void> {
   const response = await fetch(`${apiBase}/api/v1/roles/${roleCode}/skills/${skillCode}`, {
     method: "PUT",

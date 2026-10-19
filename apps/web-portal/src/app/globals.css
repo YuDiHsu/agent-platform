@@ -176,6 +176,11 @@ button:disabled, .text-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .studio-block, .modal-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; }
 .studio-block pre, .onion-full { white-space: pre-wrap; font-size: 0.85rem; }
 .onion-layer { margin-bottom: 0.75rem; border-left: 4px solid var(--pine); padding-left: 0.75rem; }
+.layer-1 { border-left-color: #2f6fad; }
+.layer-2 { border-left-color: #6b4c9a; }
+.layer-3 { border-left-color: #c47a2c; }
+.layer-4 { border-left-color: #2f8f4e; }
+.layer-5 { border-left-color: #8a6232; }
 .layer-6 { border-left-color: var(--danger); }
 .chip-list, .check-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .locked-chip { background: var(--paper-deep); border-radius: 999px; padding: 0.2rem 0.6rem; }
