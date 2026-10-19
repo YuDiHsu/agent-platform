@@ -108,6 +108,29 @@ class RoleRunner:
                     ],
                     response_model=SubAgentExecutionOutput,
                 )
+            for _ in range(2):
+                if output.execution_status != "NEED_TOOL_CALL" or not output.tool_calls:
+                    break
+                call = output.tool_calls[0]
+                if call.tool_name in BROWSER_WAIT_TOOLS:
+                    break
+                tier = await self._action_tier(call.tool_name)
+                if tier == "COMMIT":
+                    break
+                output = await self._llm.generate_structured(
+                    system_prompt=prompt,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": (
+                                f"target_role_code: {role_code}\n"
+                                f"工具 {call.tool_name} 屬於 {tier}，已直接執行。"
+                                f"參數 {call.arguments}。請完成交付，不要再呼叫工具。"
+                            ),
+                        }
+                    ],
+                    response_model=SubAgentExecutionOutput,
+                )
         except Exception as exc:
             await self._fail(ticket_id, str(exc))
             return StepOutcome(kind="failed", detail=str(exc))
@@ -199,6 +222,7 @@ class RoleRunner:
         hitl: dict[str, Any] | None = None
         if status == "WAITING_HITL":
             preview = f"{role_code} 請求執行 {call.tool_name}"
+            tier = await self._tier_in(db, call.tool_name)
             row = HitlApprovalRequest(
                 ticket_id=ticket.id,
                 session_id=chat_session_id,
@@ -206,7 +230,7 @@ class RoleRunner:
                 executing_role_code=role_code,
                 tool_name=call.tool_name,
                 execution_target=execution_target_for(call.tool_name),
-                action_tier="COMMIT",
+                action_tier=tier,
                 preview_title=preview,
                 proposed_payload=call.arguments,
                 status="PENDING",
@@ -225,6 +249,20 @@ class RoleRunner:
                 "status": "PENDING",
             }
         return StepOutcome(kind="hibernated", wait_status=status, hitl=hitl, detail=call.tool_name)
+
+    async def _action_tier(self, tool_name: str) -> str:
+        async with database_session() as db:
+            return await self._tier_in(db, tool_name)
+
+    async def _tier_in(self, db: Any, tool_name: str) -> str:
+        from sqlalchemy import select
+
+        from app.db.models import ToolRegistry
+
+        tool = await db.scalar(select(ToolRegistry).where(ToolRegistry.code == tool_name))
+        if tool is None or tool.action_tier not in {"READ", "DRAFT", "COMMIT"}:
+            return "COMMIT"
+        return str(tool.action_tier)
 
     async def _system_prompt(self, *, role_code: str, user_id: UUID, session_id: UUID, query: str) -> str:
         from sqlalchemy import select

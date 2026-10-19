@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ArtifactWorkbench } from "@/components/ArtifactViewer";
+import { HitlApprovalCard } from "@/components/HitlApprovalCard";
 import { useWorkspaceStore } from "@/lib/store/useWorkspaceStore";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -17,6 +18,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [navOpen, setNavOpen] = useState(false);
   const [benchOpen, setBenchOpen] = useState(false);
+  const [hitlOpen, setHitlOpen] = useState(false);
+  const hitlRequests = useWorkspaceStore((state) => state.hitlRequests);
   const [narrow, setNarrow] = useState(false);
   const isChat = pathname.startsWith("/chat");
 
@@ -112,7 +115,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="dot" aria-hidden="true" />
             本機掛載 0
           </span>
-          <span className="chip">待審批 {hitlCount}</span>
+          <button type="button" className="chip" onClick={() => setHitlOpen(true)}>
+            待審批 {hitlCount}
+          </button>
           <button type="button" className="ghost" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             {theme === "dark" ? "淺色" : "深色"}
@@ -134,6 +139,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="live" aria-live="polite">
         {liveAnnouncement}
       </div>
+      {hitlOpen ? (
+        <>
+          <button type="button" className="drawer-backdrop" aria-label="關閉審批通知" onClick={() => setHitlOpen(false)} />
+          <div className="sheet right" role="dialog" aria-modal="true" aria-label="審批通知">
+            <button type="button" className="ghost" onClick={() => setHitlOpen(false)} autoFocus>
+              關閉
+            </button>
+            {hitlRequests.length === 0 ? (
+              <p>目前沒有待審批的操作。</p>
+            ) : (
+              hitlRequests.map((request) => <HitlApprovalCard key={request.hitl_request_id} request={request} />)
+            )}
+          </div>
+        </>
+      ) : null}
       {navOpen ? (
         <>
           <button type="button" className="drawer-backdrop" aria-label="關閉導覽" onClick={() => setNavOpen(false)} />

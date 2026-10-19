@@ -13,7 +13,7 @@ export function MiniDagProgressBar() {
       {steps.map((step, index) => (
         <li key={step.step_id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {index > 0 ? <ChevronRight className="dag-arrow" size={16} aria-hidden="true" /> : null}
-          <span className="dag-pill status-pending">
+          <span className={`dag-pill ${step.status === "WAITING_HITL" ? "status-hitl" : "status-pending"}`}>
             <span>
               {step.step_id}. {step.target_role_code} {step.task_title}
             </span>

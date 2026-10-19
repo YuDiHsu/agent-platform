@@ -98,6 +98,10 @@ interface WorkspaceState {
   artifacts: ArtifactItemUI[];
   selectedArtifactId: string | null;
   hitlRequests: HitlRequestUI[];
+  hitlEditor: HitlRequestUI | null;
+  beginHitlEdit: (request: HitlRequestUI) => void;
+  clearHitlEditor: () => void;
+  markHitlDecided: (requestId: string) => void;
   pendingLocalDiff: PendingLocalWriteDiff | null;
   terminalLogs: TerminalExecutionLogUI[];
   mountedFolders: Array<{ mountId: string; alias: string; handleKey: string; isConnected: boolean; fileCount: number }>;
@@ -157,6 +161,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   artifacts: [],
   selectedArtifactId: null,
   hitlRequests: [],
+  hitlEditor: null,
+  beginHitlEdit: (request) =>
+    set({
+      hitlEditor: request,
+      isRightPaneOpen: true,
+      activeRightTab: "FILE_DIFF",
+    }),
+  clearHitlEditor: () => set({ hitlEditor: null }),
+  markHitlDecided: (requestId) =>
+    set((state) => ({
+      hitlRequests: state.hitlRequests.filter((item) => item.hitl_request_id !== requestId),
+      hitlEditor: state.hitlEditor?.hitl_request_id === requestId ? null : state.hitlEditor,
+      dagSteps: state.dagSteps.map((step) =>
+        step.status === "WAITING_HITL" ? { ...step, status: "COMPLETED" } : step,
+      ),
+    })),
   pendingLocalDiff: null,
   terminalLogs: [],
   mountedFolders: [],
@@ -323,6 +343,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       artifacts: [],
       selectedArtifactId: null,
       hitlRequests: [],
+      hitlEditor: null,
       messages: [],
       liveAnnouncement: "已開始新的協作。",
     }),

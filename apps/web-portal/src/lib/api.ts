@@ -251,6 +251,18 @@ export async function fetchTools(): Promise<CatalogTool[]> {
   return (await response.json()) as CatalogTool[];
 }
 
+export async function decideHitl(
+  requestId: string,
+  body: { status: "APPROVED" | "MODIFIED" | "REJECTED"; user_modified_payload?: Record<string, unknown>; rejection_reason?: string },
+): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/hitl/${requestId}/decide`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error("無法送出審批決定。");
+}
+
 export async function setToolPreference(code: string, isEnabled: boolean): Promise<void> {
   const response = await fetch(`${apiBase}/api/v1/users/me/tool-preferences`, {
     method: "PUT",

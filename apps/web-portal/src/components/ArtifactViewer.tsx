@@ -4,7 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { useWorkspaceStore, type RightPaneTab } from "@/lib/store/useWorkspaceStore";
+import { decideHitl } from "@/lib/api";
+import { useWorkspaceStore, type HitlRequestUI, type RightPaneTab } from "@/lib/store/useWorkspaceStore";
 
 const TABS: Array<{ id: RightPaneTab; label: string }> = [
   { id: "ARTIFACT", label: "產出物" },
@@ -104,7 +105,52 @@ function MarkdownBody({ content }: { content: string }) {
   );
 }
 
+function HitlEditForm({ request }: { request: HitlRequestUI }) {
+  const markHitlDecided = useWorkspaceStore((state) => state.markHitlDecided);
+  const clearHitlEditor = useWorkspaceStore((state) => state.clearHitlEditor);
+  const [draft, setDraft] = useState(JSON.stringify(request.proposed_payload, null, 2));
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      className="hitl-editor"
+      onSubmit={(event) => {
+        event.preventDefault();
+        let parsed: Record<string, unknown>;
+        try {
+          const value = JSON.parse(draft) as unknown;
+          if (value === null || typeof value !== "object" || Array.isArray(value)) {
+            throw new Error("參數必須是物件");
+          }
+          parsed = value as Record<string, unknown>;
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "參數不是合法的 JSON。");
+          return;
+        }
+        void decideHitl(request.hitl_request_id, { status: "MODIFIED", user_modified_payload: parsed })
+          .then(() => markHitlDecided(request.hitl_request_id))
+          .catch((caught: unknown) => {
+            setError(caught instanceof Error ? caught.message : "無法送出修改後的參數。");
+          });
+      }}
+    >
+      <h2>修改後再執行 {request.tool_name}</h2>
+      <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={8} />
+      {error ? <p className="error">{error}</p> : null}
+      <div className="hitl-actions">
+        <button type="submit" className="quiet-action">
+          用修改後的參數執行
+        </button>
+        <button type="button" className="quiet-action" onClick={clearHitlEditor}>
+          取消
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function ArtifactWorkbench() {
+  const hitlEditor = useWorkspaceStore((state) => state.hitlEditor);
   const activeRightTab = useWorkspaceStore((state) => state.activeRightTab);
   const setRightTab = useWorkspaceStore((state) => state.setRightTab);
   const artifacts = useWorkspaceStore((state) => state.artifacts);
@@ -126,6 +172,7 @@ export function ArtifactWorkbench() {
 
   return (
     <section className="workbench" aria-label="右側工作台" style={{ width: `${width}%` }}>
+      {hitlEditor ? <HitlEditForm request={hitlEditor} /> : null}
       <div className="tabs">
         <div role="tablist" aria-label="工作台分頁" style={{ display: "flex", gap: 6 }}>
         {TABS.map((tab) => (

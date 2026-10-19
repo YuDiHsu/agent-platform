@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.v1_chat import router as chat_router
+from app.api.v1_hitl import router as hitl_router
 from app.api.v1_rules_skills import router as rules_router
 from app.api.v1_tools import router as tools_router
 from app.core.config import settings
@@ -36,5 +37,6 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(hitl_router, prefix="/api/v1")
 app.include_router(rules_router, prefix="/api/v1")
 app.include_router(tools_router, prefix="/api/v1")

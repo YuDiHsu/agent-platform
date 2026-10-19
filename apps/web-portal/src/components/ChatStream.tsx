@@ -2,40 +2,9 @@
 
 import { FileText } from "lucide-react";
 
+import { HitlApprovalCard } from "@/components/HitlApprovalCard";
 import { RoleBadge } from "@/components/RoleBadge";
-import { StatusBadge } from "@/components/StatusBadge";
-import { useWorkspaceStore, type HitlRequestUI } from "@/lib/store/useWorkspaceStore";
-
-function HitlCard({ request }: { request: HitlRequestUI }) {
-  return (
-    <article className="hitl-card" aria-labelledby={`hitl-${request.hitl_request_id}`}>
-      <header>
-        <StatusBadge status="WAITING_HITL" />
-        <RoleBadge code={request.executing_role_code} />
-      </header>
-      <h3 id={`hitl-${request.hitl_request_id}`}>{request.preview_title}</h3>
-      <p>
-        工具 <strong>{request.tool_name}</strong>
-        <span className="badge status-pending">{request.execution_target}</span>
-      </p>
-      <pre>{JSON.stringify(request.proposed_payload, null, 2)}</pre>
-      <div className="hitl-actions">
-        <button type="button" className="quiet-action" disabled>
-          核准執行
-        </button>
-        <button type="button" className="quiet-action" disabled>
-          在右側修改內容後執行
-        </button>
-        <button type="button" className="quiet-action danger" disabled>
-          拒絕並退回 Agent
-        </button>
-      </div>
-      <p className="note" id={`hitl-note-${request.hitl_request_id}`}>
-        送出核准會在安全閘門上線後開放。這張卡片會留到你下次登入。
-      </p>
-    </article>
-  );
-}
+import { useWorkspaceStore } from "@/lib/store/useWorkspaceStore";
 
 export function ChatStream() {
   const messages = useWorkspaceStore((state) => state.messages);
@@ -71,7 +40,7 @@ export function ChatStream() {
       {hitlRequests
         .filter((request) => request.status === "PENDING")
         .map((request) => (
-          <HitlCard key={request.hitl_request_id} request={request} />
+          <HitlApprovalCard key={request.hitl_request_id} request={request} />
         ))}
     </div>
   );

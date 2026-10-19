@@ -112,6 +112,8 @@ class ScriptedGemma:
             return self._plan()
         self.role_calls += 1
         role = _role_from(text_blob)
+        if any(marker in text_blob for marker in ("已直接執行", "使用者已核准", "使用者拒絕了")):
+            return self._role_output(role)
         if self.mode == "delegate" and role in {"ARCH", "FIN"}:
             self._entered.append(role)
             if len(set(self._entered)) >= 2:
@@ -171,7 +173,7 @@ class ScriptedGemma:
                     ),
                 ],
             )
-        if self.mode == "hitl":
+        if self.mode in {"hitl", "read_pass", "draft_pass"}:
             return OrchestratorPlanOutput(
                 intent_mode="DELEGATE_DAG",
                 reasoning="寄信前需要核准",
@@ -256,6 +258,25 @@ class ScriptedGemma:
         )
 
     def _role_output(self, role: str) -> SubAgentExecutionOutput:
+        if "已直接執行" in self.prompts[-1] or "使用者已核准" in self.prompts[-1] or "使用者拒絕了" in self.prompts[-1]:
+            return self._finished(role)
+        if self.mode == "read_pass":
+            return SubAgentExecutionOutput(
+                execution_status="NEED_TOOL_CALL",
+                thought_process="先搜尋信件",
+                tool_calls=[SubAgentToolCall(tool_name="o365_search_messages", arguments={"query": "週報"})],
+            )
+        if self.mode == "draft_pass":
+            return SubAgentExecutionOutput(
+                execution_status="NEED_TOOL_CALL",
+                thought_process="先存草稿",
+                tool_calls=[
+                    SubAgentToolCall(
+                        tool_name="o365_create_draft",
+                        arguments={"subject": "草稿", "body": "尚未寄出"},
+                    )
+                ],
+            )
         if self.mode == "hitl" or (self.mode == "handoff_then_wait" and role == "PM"):
             return SubAgentExecutionOutput(
                 execution_status="NEED_TOOL_CALL",
@@ -297,6 +318,27 @@ class ScriptedGemma:
                 + "\n\nFULL-BODY-SENTINEL\n\n```mermaid\ngraph TD; A-->B;\n```\n"
             ),
             handoff_notes_for_next_role=f"{role} 交接備註",
+        )
+
+    def _finished(self, role: str) -> SubAgentExecutionOutput:
+        kinds = {
+            "SA": "REQUIREMENT_SPEC",
+            "ARCH": "ARCH_DIAGRAM",
+            "FIN": "FINANCIAL_MODEL",
+            "PM": "PROJECT_PLAN_WBS",
+            "SE": "CODE_DIFF",
+            "CEO": "STRATEGY_MEMO",
+            "ORCH": "STRATEGY_MEMO",
+        }
+        return SubAgentExecutionOutput(
+            execution_status="COMPLETED",
+            thought_process=f"{role} 依審批結果收尾",
+            tool_calls=[],
+            artifact_title=f"{role} 收尾",
+            artifact_type=kinds[role],  # type: ignore[arg-type]
+            summary_200_words="摘" * 200,
+            full_markdown_content=f"# {role} 收尾\n\nFULL-BODY-SENTINEL\n",
+            handoff_notes_for_next_role=f"{role} 收尾備註",
         )
 
 
@@ -745,3 +787,93 @@ async def test_org_chart_lists_role_history_tokens_and_skills(
     assert roles["PM"]["skill_count"] > 0
     assert any(ticket["title"] == "彙整交付" for ticket in roles["PM"]["tickets"])
     assert roles["PM"]["tickets"][0]["token_budget"] == 16000
+
+
+async def test_read_and_draft_tools_finish_without_pausing(
+    client: httpx.AsyncClient,
+    scripted: ScriptedGemma,
+) -> None:
+    user = await _login(client)
+    for mode in ("read_pass", "draft_pass"):
+        scripted.mode = mode
+        scripted.prompts.clear()
+        session_id = await _open_session(client, user)
+        events = await _send(client, user, session_id, "請處理信件")
+        body = await _state(client, user, session_id)
+        assert body["hold_reason"] is None
+        assert body["pending_hitl"] == []
+        assert body["status"] == "COMPLETED"
+        assert events[-1][0] == "final_response"
+        assert "hitl_required" not in {name for name, _payload in events}
+
+
+async def test_commit_tool_pauses_and_modified_payload_is_what_resumes(
+    client: httpx.AsyncClient,
+    scripted: ScriptedGemma,
+) -> None:
+    scripted.mode = "hitl"
+    user = await _login(client)
+    stranger = await _login(client)
+    session_id = await _open_session(client, user)
+    events = await _send(client, user, session_id, "請寄出進度信")
+    assert any(name == "hitl_required" for name, _payload in events)
+    body = await _state(client, user, session_id)
+    pending = body["pending_hitl"]
+    assert isinstance(pending, list)
+    request_id = pending[0]["hitl_request_id"]
+    forbidden = await client.post(
+        f"/api/v1/hitl/{request_id}/decide",
+        headers=_headers(stranger),
+        json={"status": "APPROVED"},
+    )
+    assert forbidden.status_code == 403
+    scripted.prompts.clear()
+    decided = await client.post(
+        f"/api/v1/hitl/{request_id}/decide",
+        headers=_headers(user),
+        json={
+            "status": "MODIFIED",
+            "user_modified_payload": {"to": "boss@company.com", "subject": "改過的主旨"},
+        },
+    )
+    assert decided.status_code == 200
+    assert decided.json()["executed_payload"]["to"] == "boss@company.com"
+    resumed = "\n".join(scripted.prompts)
+    assert "boss@company.com" in resumed
+    assert "使用者已核准" in resumed
+    after = await _state(client, user, session_id)
+    assert after["pending_hitl"] == []
+    assert after["status"] == "COMPLETED"
+    tickets = after["tickets"]
+    assert isinstance(tickets, list)
+    assert tickets[0]["status"] == "COMPLETED"
+
+
+async def test_rejected_commit_returns_the_reason_to_the_role(
+    client: httpx.AsyncClient,
+    scripted: ScriptedGemma,
+) -> None:
+    scripted.mode = "hitl"
+    user = await _login(client)
+    session_id = await _open_session(client, user)
+    await _send(client, user, session_id, "請寄出進度信")
+    body = await _state(client, user, session_id)
+    pending = body["pending_hitl"]
+    assert isinstance(pending, list)
+    request_id = pending[0]["hitl_request_id"]
+    scripted.prompts.clear()
+    decided = await client.post(
+        f"/api/v1/hitl/{request_id}/decide",
+        headers=_headers(user),
+        json={"status": "REJECTED", "rejection_reason": "收件人錯誤"},
+    )
+    assert decided.status_code == 200
+    assert decided.json()["executed_payload"] is None
+    resumed = "\n".join(scripted.prompts)
+    assert "使用者拒絕了" in resumed
+    assert "收件人錯誤" in resumed
+    after = await _state(client, user, session_id)
+    assert after["pending_hitl"] == []
+    tickets = after["tickets"]
+    assert isinstance(tickets, list)
+    assert tickets[0]["status"] == "COMPLETED"

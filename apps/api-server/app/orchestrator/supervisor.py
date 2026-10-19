@@ -466,6 +466,13 @@ class ChatTurn:
             by_id = {str(ticket.id): ticket.status for ticket in tickets}
             if chat is not None:
                 chat.dag_snapshot = [{**node, "status": by_id.get(str(node["ticket_id"]), node["status"])} for node in self._snapshot]
+        if reason == "WAITING_HITL" and hitl is not None:
+            await self._emit(
+                "hitl_required",
+                role_code=str(hitl.get("executing_role_code", "ORCH")),
+                content=message,
+                payload=hitl,
+            )
         await self._emit(
             "checkpoint_hibernated",
             role_code="ORCH",
