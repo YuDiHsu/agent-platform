@@ -607,3 +607,26 @@ class ChatMessage(Base):
         server_default=text("'{}'::jsonb"),
     )
     created_at: Mapped[datetime | None] = _created_at()
+
+
+class SecurityAuditLog(Base):
+    """Security denials: cross-user mounts, path traversal, and sensitive files.
+
+    Implements: REQ-012, ADR-0004.
+    """
+
+    __tablename__ = "security_audit_logs"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    event_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime | None] = _created_at()

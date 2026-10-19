@@ -18,10 +18,13 @@ from app.core.crypto_vault import read_connector_token
 from app.db.models import AgentRole, AgentRoleTool, ToolRegistry, UserToolPreference
 from app.db.session import database_session
 from app.tool_bus import connectors as _connectors
+from app.tool_bus import local_fs as _local_fs
 from app.tool_bus.adapter import BaseToolAdapter, ToolContext, ToolResult, registered_adapters
 from app.tool_bus.remote import HttpWebhookToolAdapter, RemoteMCPToolAdapter
 
-_ = _connectors
+_ = (_connectors, _local_fs)
+
+_BROWSER_TERMINAL = {"BROWSER_OFFLINE", "TIMEOUT", "ERROR"}
 
 _CACHE_TTL_SECONDS = 60
 _BREAKER_THRESHOLD = 3
@@ -176,6 +179,8 @@ class UnifiedToolBus:
             self._breaker.record_failure(plan.namespace)
             reason = "逾時" if isinstance(exc, TimeoutError) else "連接器呼叫失敗"
             return ToolResult(plan.tool_name, False, {}, reason)
+        if isinstance(output, dict) and output.get("status") in _BROWSER_TERMINAL:
+            return ToolResult(plan.tool_name, False, output, str(output.get("error") or output.get("status")))
         self._breaker.record_success(plan.namespace)
         if plan.tier == "READ":
             await _cache_set(session_id, plan.tool_name, plan.arguments, output)

@@ -54,16 +54,46 @@ tools:
       properties:
         channel: {type: string}
         text: {type: string}
-  - code: workspace_read_file
-    namespace: workspace
-    name: 讀取工作區檔案
-    description: 讀取使用者已掛載工作區中的檔案。
+  - code: workspace_list_files
+    namespace: local_fs
+    name: 列出本機檔案
+    description: 列出使用者已授權本機資料夾中的檔案。
     action_tier: READ
+    execution_target: BROWSER_WS_RPC
+    timeout_seconds: 35
     scope_type: COMMON_DEFAULT
     input_json_schema:
       type: object
       properties:
+        mount_id: {type: string}
         path: {type: string}
+  - code: workspace_read_file
+    namespace: local_fs
+    name: 讀取本機檔案
+    description: 讀取使用者已授權本機資料夾中的檔案。Office 檔會轉成 Markdown。
+    action_tier: READ
+    execution_target: BROWSER_WS_RPC
+    timeout_seconds: 35
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        mount_id: {type: string}
+        path: {type: string}
+  - code: workspace_write_file
+    namespace: local_fs
+    name: 寫入本機檔案
+    description: 在使用者確認紅綠差異後，寫入已授權的本機資料夾。
+    action_tier: COMMIT
+    execution_target: BROWSER_WS_RPC
+    timeout_seconds: 35
+    scope_type: COMMON_DEFAULT
+    input_json_schema:
+      type: object
+      properties:
+        mount_id: {type: string}
+        path: {type: string}
+        content: {type: string}
   - code: TOOL_FIN_LEDGER
     namespace: finance
     name: 查詢財務分類帳

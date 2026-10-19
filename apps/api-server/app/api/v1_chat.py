@@ -186,6 +186,16 @@ async def bootstrap(user: CurrentUser = Depends(require_user)) -> dict[str, Any]
                 }
                 for mount in mounts
             ],
+            "local_workspace_mounts": [
+                {
+                    "id": str(mount.id),
+                    "mount_alias": mount.mount_alias,
+                    "browser_handle_key": mount.browser_handle_key,
+                    "provider_type": mount.provider_type,
+                    "permission_mode": mount.permission_mode,
+                }
+                for mount in mounts
+            ],
             "agents": [
                 {
                     "code": role.code,

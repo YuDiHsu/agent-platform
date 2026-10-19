@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import ReactDiffViewer from "react-diff-viewer-continued";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { decideHitl } from "@/lib/api";
+import { BrowserLocalFsBridge } from "@/lib/localFsBridge";
+import { cancelDiskWrite, confirmDiskWrite } from "@/lib/wsClientToolRunner";
 import { useWorkspaceStore, type HitlRequestUI, type RightPaneTab } from "@/lib/store/useWorkspaceStore";
 
 const TABS: Array<{ id: RightPaneTab; label: string }> = [
@@ -149,6 +152,75 @@ function HitlEditForm({ request }: { request: HitlRequestUI }) {
   );
 }
 
+function FileDiffPanel() {
+  const diff = useWorkspaceStore((state) => state.pendingLocalDiff);
+  const setPendingOriginal = useWorkspaceStore((state) => state.setPendingOriginal);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!diff?.handleKey || diff.originalContent) return;
+    let cancelled = false;
+    void BrowserLocalFsBridge.readFileForAgent(diff.handleKey, diff.relativePath)
+      .then((file) => {
+        if (!cancelled && file.encoding === "utf-8") setPendingOriginal(file.content);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [diff?.handleKey, diff?.originalContent, diff?.relativePath, setPendingOriginal]);
+
+  if (!diff) {
+    return <p className="empty">本機寫入的紅綠差異會在代理提出寫入後出現。確認前不會寫入磁碟。</p>;
+  }
+
+  return (
+    <div className="file-diff">
+      <h2>{diff.relativePath || "本機檔案"}</h2>
+      <p className="note">左側是目前磁碟內容，右側是即將寫入的內容。按下確認後才會寫入本機硬碟。</p>
+      <ReactDiffViewer
+        oldValue={diff.originalContent}
+        newValue={diff.proposedContent}
+        splitView
+        leftTitle="目前磁碟內容"
+        rightTitle="即將寫入"
+      />
+      {error ? <p className="error">{error}</p> : null}
+      <div className="hitl-actions">
+        <button
+          type="button"
+          className="quiet-action"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            void confirmDiskWrite(diff)
+              .catch((caught: unknown) => {
+                setError(caught instanceof Error ? caught.message : "無法寫入本機檔案。");
+                setBusy(false);
+              });
+          }}
+        >
+          確認寫入本機硬碟
+        </button>
+        <button
+          type="button"
+          className="quiet-action"
+          disabled={busy}
+          onClick={() => {
+            void cancelDiskWrite(diff).catch((caught: unknown) => {
+              setError(caught instanceof Error ? caught.message : "無法取消寫入。");
+            });
+          }}
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ArtifactWorkbench() {
   const hitlEditor = useWorkspaceStore((state) => state.hitlEditor);
   const activeRightTab = useWorkspaceStore((state) => state.activeRightTab);
@@ -156,7 +228,10 @@ export function ArtifactWorkbench() {
   const artifacts = useWorkspaceStore((state) => state.artifacts);
   const selectedArtifactId = useWorkspaceStore((state) => state.selectedArtifactId);
   const dagSteps = useWorkspaceStore((state) => state.dagSteps);
+  const mountedFolders = useWorkspaceStore((state) => state.mountedFolders);
+  const openPendingLocalDiff = useWorkspaceStore((state) => state.openPendingLocalDiff);
   const selected = artifacts.find((item) => item.artifact_id === selectedArtifactId) ?? artifacts[0];
+  const connected = mountedFolders.find((folder) => folder.isConnected);
   const [width, setWidth] = useState(42);
 
   function download() {
@@ -230,7 +305,7 @@ export function ArtifactWorkbench() {
             </ol>
           )
         ) : null}
-        {activeRightTab === "FILE_DIFF" ? <p className="empty">本機寫入的紅綠差異會在檔案橋接完成後出現。</p> : null}
+        {activeRightTab === "FILE_DIFF" ? <FileDiffPanel /> : null}
         {activeRightTab === "TERMINAL_CLI" ? <p className="empty">技能的終端機輸出會在沙盒執行完成後出現。</p> : null}
         {activeRightTab === "PROMPT_INSPECTOR" ? <p className="empty">洋蔥式提示詞檢視會在規範編譯完成後出現。</p> : null}
       </div>
@@ -239,10 +314,27 @@ export function ArtifactWorkbench() {
           <button type="button" onClick={download}>
             匯出 .md
           </button>
-          <button type="button" disabled>
+          <button
+            type="button"
+            disabled={!connected}
+            onClick={() => {
+              if (!selected || !connected) return;
+              const safeName = `${selected.title || "artifact"}.md`.replace(/[\\/]/g, "-");
+              openPendingLocalDiff({
+                rpc_id: `artifact-${selected.artifact_id}`,
+                handleKey: connected.handleKey,
+                relativePath: safeName,
+                originalContent: "",
+                proposedContent: selected.content_body,
+                executingRole: selected.producer_role,
+              });
+            }}
+          >
             直接寫入本機掛載資料夾
           </button>
-          <p className="note">尚未掛載本機資料夾，所以不能寫入磁碟。</p>
+          <p className="note">
+            {connected ? "會先打開紅綠差異，確認後才寫入磁碟。" : "尚未掛載本機資料夾，所以不能寫入磁碟。"}
+          </p>
         </div>
       ) : null}
     </section>

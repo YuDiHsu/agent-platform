@@ -26,6 +26,7 @@ EXPECTED_TABLES = {
     "tools_registry",
     "agent_role_tools",
     "user_tool_preferences",
+    "security_audit_logs",
 }
 HNSW_INDEXES = {
     "idx_agent_roles_embedding",

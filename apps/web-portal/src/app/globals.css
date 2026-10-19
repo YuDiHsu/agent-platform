@@ -250,6 +250,9 @@ button:disabled, .text-button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 12px 16px;
   border-top: 1px solid var(--line);
 }
+.mount-control { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.file-diff h2 { margin-top: 0; }
+.file-diff .hitl-actions { margin-top: 12px; }
 
 .mini-dag { display: flex; gap: 8px; overflow: auto; padding: 0 0 16px; list-style: none; margin: 0; }
 .dag-pill {

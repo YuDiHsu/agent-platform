@@ -9,10 +9,12 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@xyflow/react": "^12.12.0",
+    "idb-keyval": "^6.3.0",
     "lucide-react": "^1.57.0",
     "mermaid": "^12.2.0",
     "next": "^15.5.4",
     "react": "^19.1.1",
+    "react-diff-viewer-continued": "^4.4.0",
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",

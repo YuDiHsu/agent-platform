@@ -9,6 +9,7 @@ dependencies = [
     "cryptography>=50.0.2",
     "fastapi>=0.115",
     "httpx>=0.28",
+    "markitdown[docx,pdf,xlsx]>=0.1.8",
     "openai>=1.60",
     "pgvector>=0.3",
     "psycopg[binary]>=3.2",
@@ -41,7 +42,7 @@ warn_unused_ignores = true
 disallow_any_generics = true
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "alembic.*"]
+module = ["pgvector.*", "alembic.*", "markitdown", "markitdown.*"]
 ignore_missing_imports = true
 
 [tool.uv]

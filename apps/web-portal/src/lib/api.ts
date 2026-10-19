@@ -46,10 +46,33 @@ export interface BootstrapSession {
   updated_at: string;
 }
 
+export interface BootstrapMount {
+  id: string;
+  mount_alias: string;
+  browser_handle_key: string | null;
+  provider_type: string;
+  permission_mode: string;
+}
+
 export interface BootstrapPayload {
   sessions: BootstrapSession[];
   mounts: Array<{ mount_id: string; alias: string; handle_key: string | null }>;
+  local_workspace_mounts: BootstrapMount[];
   pending_hitl: SessionSnapshot["pending_hitl"];
+}
+
+export async function registerLocalMount(input: {
+  mount_alias: string;
+  browser_handle_key: string;
+  file_tree: Array<{ path: string; size: number; lastModified: number }>;
+}): Promise<{ id: string }> {
+  const response = await fetch(`${apiBase}/api/v1/mounts/register`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("無法登記本機資料夾。");
+  return (await response.json()) as { id: string };
 }
 
 export async function fetchBootstrap(): Promise<BootstrapPayload> {

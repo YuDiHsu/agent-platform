@@ -13,6 +13,7 @@ from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.artifact_manager import store_artifact
 from app.orchestrator.state import ArtifactPointer, SubAgentExecutionOutput
+from app.tool_bus.adapter import ToolResult
 
 def _activated_skill(output: SubAgentExecutionOutput) -> str | None:
     if output.execution_status != "NEED_TOOL_CALL" or not output.tool_calls:
@@ -37,6 +38,14 @@ class StepOutcome:
     hitl: dict[str, Any] | None = None
     detail: str | None = None
     skill_activated: dict[str, str] | None = None
+
+
+def _browser_offline(results: list[ToolResult]) -> bool:
+    return any(
+        (isinstance(item.output, dict) and item.output.get("status") == "BROWSER_OFFLINE")
+        or (item.error is not None and "BROWSER_OFFLINE" in item.error)
+        for item in results
+    )
 
 
 def wait_status_for(tool_name: str) -> str:
@@ -116,8 +125,10 @@ class RoleRunner:
                     break
                 runnable: list[tuple[str, dict[str, Any]]] = []
                 blocked = None
+                browser_call = None
                 for call in output.tool_calls:
                     if call.tool_name in BROWSER_WAIT_TOOLS:
+                        browser_call = call
                         break
                     tier = await self._action_tier(call.tool_name)
                     pair = (call.tool_name, dict(call.arguments))
@@ -125,6 +136,34 @@ class RoleRunner:
                         blocked = call
                         break
                     runnable.append(pair)
+                if browser_call is not None:
+                    results = await bus.dispatch(
+                        role_code=role_code,
+                        user_id=user_id,
+                        session_id=chat_session_id,
+                        calls=[(browser_call.tool_name, dict(browser_call.arguments))],
+                    )
+                    if _browser_offline(results):
+                        output = output.model_copy(update={"tool_calls": [browser_call]})
+                        break
+                    summary = "；".join(
+                        f"{item.tool_name} {'已直接執行' if item.ok else '執行失敗'} {item.output or item.error}"
+                        for item in results
+                    )
+                    output = await self._llm.generate_structured(
+                        system_prompt=prompt,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"target_role_code: {role_code}\n"
+                                    f"{summary}。請完成交付，不要再呼叫工具。"
+                                ),
+                            }
+                        ],
+                        response_model=SubAgentExecutionOutput,
+                    )
+                    continue
                 if blocked is not None:
                     reason = await bus.refusal(
                         role_code=role_code,

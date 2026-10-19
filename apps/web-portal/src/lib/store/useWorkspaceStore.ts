@@ -1,4 +1,4 @@
-// Implements: REQ-002, REQ-010, ADR-0003
+import { diffFromHitl } from "@/lib/localWrite";
 import { create } from "zustand";
 
 export type RightPaneTab = "ARTIFACT" | "FILE_DIFF" | "TERMINAL_CLI" | "LIVE_DAG" | "PROMPT_INSPECTOR";
@@ -44,11 +44,21 @@ export interface HitlRequestUI {
 
 export interface PendingLocalWriteDiff {
   rpc_id: string;
+  hitlRequestId?: string;
   handleKey: string;
   relativePath: string;
   originalContent: string;
   proposedContent: string;
   executingRole: string;
+}
+
+export interface MountedFolder {
+  mountId: string;
+  alias: string;
+  handleKey: string;
+  isConnected: boolean;
+  needsPermission: boolean;
+  fileCount: number;
 }
 
 export interface TerminalExecutionLogUI {
@@ -104,12 +114,14 @@ interface WorkspaceState {
   markHitlDecided: (requestId: string) => void;
   pendingLocalDiff: PendingLocalWriteDiff | null;
   terminalLogs: TerminalExecutionLogUI[];
-  mountedFolders: Array<{ mountId: string; alias: string; handleKey: string; isConnected: boolean; fileCount: number }>;
+  mountedFolders: MountedFolder[];
   messages: ChatMessageUI[];
   liveAnnouncement: string;
   handleSSEEvent: (eventType: string, payload: Record<string, unknown>) => void;
   openPendingLocalDiff: (diff: PendingLocalWriteDiff) => void;
+  setPendingOriginal: (content: string) => void;
   resolvePendingLocalDiff: () => void;
+  setMountedFolders: (folders: MountedFolder[]) => void;
   selectArtifact: (artifactId: string) => void;
   setRightTab: (tab: RightPaneTab) => void;
   appendMessage: (message: ChatMessageUI) => void;
@@ -280,13 +292,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         break;
       case "hitl_required": {
         const hitl = asHitl(payload);
-        set((state) => ({
-          hitlRequests: prependHitl(state.hitlRequests, hitl),
-          liveAnnouncement: `${hitl.executing_role_code} 等待人工審批 ${hitl.tool_name}`,
-          dagSteps: state.dagSteps.map((step) =>
-            step.target_role_code === payload.executing_role_code ? { ...step, status: "WAITING_HITL" } : step,
-          ),
-        }));
+        set((state) => {
+          const connected = state.mountedFolders.find((folder) => folder.isConnected) ?? state.mountedFolders[0];
+          const diff = diffFromHitl(hitl, connected?.handleKey ?? "");
+          return {
+            hitlRequests: prependHitl(state.hitlRequests, hitl),
+            liveAnnouncement: `${hitl.executing_role_code} 等待人工審批 ${hitl.tool_name}`,
+            dagSteps: state.dagSteps.map((step) =>
+              step.target_role_code === payload.executing_role_code ? { ...step, status: "WAITING_HITL" } : step,
+            ),
+            ...(diff
+              ? { pendingLocalDiff: diff, isRightPaneOpen: true, activeRightTab: "FILE_DIFF" as const }
+              : {}),
+          };
+        });
         break;
       }
       case "final_response":
@@ -330,7 +349,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   },
 
   openPendingLocalDiff: (diff) => set({ pendingLocalDiff: diff, isRightPaneOpen: true, activeRightTab: "FILE_DIFF" }),
+  setPendingOriginal: (content) =>
+    set((state) =>
+      state.pendingLocalDiff
+        ? { pendingLocalDiff: { ...state.pendingLocalDiff, originalContent: content } }
+        : {},
+    ),
   resolvePendingLocalDiff: () => set({ pendingLocalDiff: null }),
+  setMountedFolders: (folders) => set({ mountedFolders: folders }),
   selectArtifact: (artifactId) => set({ selectedArtifactId: artifactId, isRightPaneOpen: true, activeRightTab: "ARTIFACT" }),
   setRightTab: (tab) => set({ activeRightTab: tab, isRightPaneOpen: true }),
   appendMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
