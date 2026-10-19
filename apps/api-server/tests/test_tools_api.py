@@ -35,7 +35,7 @@ async def test_disabled_tool_stays_off_after_another_login(client: httpx.AsyncCl
     codes = {row["code"] for row in listed}
     assert "o365_search_messages" in codes
     assert "TOOL_HIDDEN_GUARDRAIL" not in codes
-    assert all(row["is_enabled"] for row in listed)
+    assert all(row["is_enabled"] is False for row in listed)
 
     hidden = await client.put(
         "/api/v1/users/me/tool-preferences",
@@ -47,14 +47,24 @@ async def test_disabled_tool_stays_off_after_another_login(client: httpx.AsyncCl
     saved = await client.put(
         "/api/v1/users/me/tool-preferences",
         headers=headers,
-        json={"code": "o365_search_messages", "is_enabled": False},
+        json={"code": "o365_search_messages", "is_enabled": True},
     )
     assert saved.status_code == 204
 
     again = await _login(client, "tools-user@example.com")
     restored = (await client.get("/api/v1/tools", headers=again)).json()
     mail = next(row for row in restored if row["code"] == "o365_search_messages")
+    assert mail["is_enabled"] is True
+    turned_off = await client.put(
+        "/api/v1/users/me/tool-preferences",
+        headers=again,
+        json={"code": "o365_search_messages", "is_enabled": False},
+    )
+    assert turned_off.status_code == 204
+    after_logout = await _login(client, "tools-user@example.com")
+    persisted = (await client.get("/api/v1/tools", headers=after_logout)).json()
+    mail = next(row for row in persisted if row["code"] == "o365_search_messages")
     assert mail["is_enabled"] is False
-    bootstrap = await client.get("/api/v1/users/me/bootstrap", headers=again)
+    bootstrap = await client.get("/api/v1/users/me/bootstrap", headers=after_logout)
     preferences = {row["code"]: row["is_enabled"] for row in bootstrap.json()["tool_preferences"]}
     assert preferences["o365_search_messages"] is False

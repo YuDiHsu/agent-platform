@@ -27,7 +27,7 @@ def _axis(index: int) -> list[float]:
 
 async def test_turn_keeps_hidden_tools_and_caps_the_authorized_set_at_five() -> None:
     codes = [f"TEST_NEAR_{index}" for index in range(6)]
-    extra = ["TEST_HIDDEN", "TEST_ROLE_ONLY", "TEST_DISABLED", "TEST_OTHER_USER_OFF"]
+    extra = ["TEST_HIDDEN", "TEST_HIDDEN_FAR", "TEST_ROLE_ONLY", "TEST_DISABLED", "TEST_OTHER_USER_OFF"]
     async with get_session_factory()() as session:
         await SeedRunner(session, EmbeddingClient()).run()
         user = User(email=f"rag-{uuid4().hex}@example.com", display_name="檢索者", department="RD")
@@ -58,6 +58,17 @@ async def test_turn_keeps_hidden_tools_and_caps_the_authorized_set_at_five() -> 
             namespace="test",
             name="隱藏工具",
             description="HIDDEN-TOOL-GUARD-19",
+            input_json_schema={"type": "object"},
+            scope_type="COMMON_DEFAULT",
+            is_visible_to_user=False,
+            routing_embedding=_axis(2),
+            is_active=True,
+        )
+        hidden_far = ToolRegistry(
+            code="TEST_HIDDEN_FAR",
+            namespace="test",
+            name="遙遠隱藏工具",
+            description="TEST_HIDDEN_FAR",
             input_json_schema={"type": "object"},
             scope_type="COMMON_DEFAULT",
             is_visible_to_user=False,
@@ -97,9 +108,11 @@ async def test_turn_keeps_hidden_tools_and_caps_the_authorized_set_at_five() -> 
             routing_embedding=_toward_query(0),
             is_active=True,
         )
-        session.add_all([hidden, role_only, disabled, shared])
+        session.add_all([hidden, hidden_far, role_only, disabled, shared])
         await session.flush()
         session.add(AgentRoleTool(role_id=fin.id, tool_id=role_only.id))
+        for tool in [*made, shared]:
+            session.add(UserToolPreference(user_id=user.id, tool_id=tool.id, is_enabled=True))
         session.add(UserToolPreference(user_id=user.id, tool_id=disabled.id, is_enabled=False))
         session.add(UserToolPreference(user_id=other.id, tool_id=shared.id, is_enabled=False))
         private = AgentRole(
@@ -172,7 +185,8 @@ async def test_turn_keeps_hidden_tools_and_caps_the_authorized_set_at_five() -> 
     assert len(selected) == TOP_K
     picked = [tool.code for tool in selected]
     assert "TEST_HIDDEN" in picked
-    assert "TOOL_HIDDEN_GUARDRAIL" in picked
+    assert "TEST_HIDDEN_FAR" not in picked
+    assert "TOOL_HIDDEN_GUARDRAIL" not in picked
     assert "TEST_NEAR_0" in picked
     assert "TEST_NEAR_5" not in picked
     assert "TEST_ROLE_ONLY" not in picked

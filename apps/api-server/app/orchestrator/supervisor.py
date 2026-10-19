@@ -93,10 +93,7 @@ class ChatTurn:
             return
         await self._load_quota()
         plan = await self._llm.generate_structured(
-            system_prompt=(
-                "你是主代理 ORCH。能直接回答就用 DIRECT_ANSWER；"
-                "跨角色工作就用 DELEGATE_DAG，且 depends_on_steps 必須無環。"
-            ),
+            system_prompt=await self._planner_prompt(),
             messages=[{"role": "user", "content": self._message}],
             response_model=OrchestratorPlanOutput,
         )
@@ -330,6 +327,27 @@ class ChatTurn:
             limit = 4 if user is None else user.max_concurrent_tickets
         self._max_concurrent = max(1, limit)
         self._slots = asyncio.Semaphore(self._max_concurrent)
+
+    async def _planner_prompt(self) -> str:
+        from app.llm.embedding_client import EmbeddingClient
+        from app.orchestrator.tool_rag import ToolRetriever
+
+        embedding = await EmbeddingClient().embed_text(self._message)
+        async with database_session() as db:
+            user = await db.get(User, self._user_id)
+            department = "GLOBAL" if user is None else user.department
+            roles = await ToolRetriever().roles_for_turn(
+                db,
+                user_id=self._user_id,
+                user_department=department,
+                query_embedding=embedding,
+            )
+        candidates = "、".join(role.code for role in roles) or "無"
+        return (
+            "你是主代理 ORCH。能直接回答就用 DIRECT_ANSWER；"
+            "跨角色工作就用 DELEGATE_DAG，且 depends_on_steps 必須無環。"
+            f"本回合餘弦距離最近的候選角色：{candidates}。"
+        )
 
     async def _role_codes(self) -> set[str]:
         async with database_session() as db:

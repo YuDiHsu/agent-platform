@@ -44,7 +44,7 @@ async def list_tools(user: CurrentUser = Depends(require_user)) -> list[dict[str
                 "action_tier": tool.action_tier,
                 "scope_type": tool.scope_type,
                 "is_visible_to_user": tool.is_visible_to_user,
-                "is_enabled": prefs.get(tool.id, True),
+                "is_enabled": prefs.get(tool.id, False),
             }
             for tool in tools
             if _visible(tool, user)

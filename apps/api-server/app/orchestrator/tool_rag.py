@@ -53,7 +53,6 @@ class ToolRetriever:
             ToolRegistry.scope_type == "COMMON_DEFAULT",
             ToolRegistry.id.in_(bound),
         )
-        enabled = or_(preference.is_(None), preference.is_(True))
         distance = ToolRegistry.routing_embedding.cosine_distance(query_embedding)
         rows = (
             await db.execute(
@@ -63,13 +62,14 @@ class ToolRetriever:
                     ToolRegistry.routing_embedding.is_not(None),
                     or_(
                         ToolRegistry.is_visible_to_user.is_(False),
-                        and_(ToolRegistry.is_visible_to_user.is_(True), authorized, enabled),
+                        and_(ToolRegistry.is_visible_to_user.is_(True), authorized, preference.is_(True)),
                     ),
                 )
                 .order_by(distance.asc())
+                .limit(TOP_K)
             )
         ).all()
-        ranked = [
+        return [
             RetrievedTool(
                 code=tool.code,
                 name=tool.name,
@@ -80,11 +80,6 @@ class ToolRetriever:
             )
             for tool, score in rows
         ]
-        hidden = [tool for tool in ranked if not tool.visible_to_user]
-        visible = [tool for tool in ranked if tool.visible_to_user]
-        chosen = hidden[:TOP_K]
-        chosen.extend(visible[: TOP_K - len(chosen)])
-        return chosen
 
     async def roles_for_turn(
         self,

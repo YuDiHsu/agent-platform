@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "BAAI/bge-m3"
     EMBEDDING_DIMENSION: int = Field(default=1024, ge=1)
     EMBEDDING_API_KEY: str = "local"
-    TOKEN_VAULT_KEY: str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    TOKEN_VAULT_KEY: str = ""
     SEED_ON_STARTUP: bool = True
     CORS_ORIGINS: str = "http://localhost:3000"
 

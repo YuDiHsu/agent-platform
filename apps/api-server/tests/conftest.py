@@ -18,6 +18,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 os.environ["EMBEDDING_DIMENSION"] = "32"
+os.environ["TOKEN_VAULT_KEY"] = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 os.environ["EMBEDDING_MODEL_NAME"] = "BAAI/bge-m3"
 os.environ["EMBEDDING_API_KEY"] = "local"
 os.environ["SGLANG_BASE_URL"] = "http://sglang.test/v1"

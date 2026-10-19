@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.db.models import UserConnectorToken
 
 _NONCE_BYTES = 12
+_PLACEHOLDER_KEY = "REPLACE_WITH_32_BYTE_BASE64"
 
 
 class TokenIntegrityError(Exception):
@@ -40,7 +41,10 @@ class TokenVault:
 
     @classmethod
     def from_settings(cls) -> "TokenVault":
-        key = base64.b64decode(settings.TOKEN_VAULT_KEY)
+        encoded = settings.TOKEN_VAULT_KEY
+        if not encoded or encoded == _PLACEHOLDER_KEY:
+            raise ValueError("TOKEN_VAULT_KEY 必須是部署時產生的 32 byte base64 金鑰")
+        key = base64.b64decode(encoded)
         return cls(key)
 
     def seal(self, plaintext: str) -> bytes:
