@@ -19,6 +19,7 @@ class CurrentUser:
     max_concurrent_tickets: int
     token_quota_limit: int | None
     tokens_consumed_total: int
+    is_admin: bool
 
 
 def get_llm() -> GemmaSGLangClient:
@@ -38,4 +39,5 @@ async def require_user(x_user_id: UUID = Header(...)) -> CurrentUser:
             max_concurrent_tickets=user.max_concurrent_tickets,
             token_quota_limit=user.token_quota_limit,
             tokens_consumed_total=user.tokens_consumed_total,
+            is_admin=bool(user.is_admin),
         )

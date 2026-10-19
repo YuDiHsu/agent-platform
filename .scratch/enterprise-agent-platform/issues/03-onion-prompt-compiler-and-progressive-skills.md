@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] 擴充 `rules_registry` 與 `skills_registry` 支援 `is_visible_to_user`（預設 `true`）與 `approval_status` 欄位（`ADR-0004`）
-- [ ] 洋蔥式編譯器固定以 `GLOBAL_MANDATORY` 與當前使用者所屬部門之 `DEPARTMENT_SHARED` 規範作為最外層靜態前綴（依 `priority` 與 `code` 確定性排序），並將動態工具定義固定置於最外層尾端（Layer 6），確保多人同時在線時 Layer 1~4 的 SGLang KV Cache 前綴 100% 共享（`REQ-013`, `ADR-003`, `ADR-0002`）
-- [ ] 嚴格隔離角色專屬規範：`SA` 編譯後的提示詞包含全公司規範與 `RULE_SA_OPENAPI_AND_ERD`，且 0% 包含 `FIN` 或 `SE` 的專屬規範（`TC-M5-01`）
-- [ ] 系統底層隱藏保護：設為 `is_visible_to_user = false` 的底層 Rules 與 Skills 在後端編譯時強制載入，但一般使用者的查詢 API（`GET /api/v1/rules`, `GET /api/v1/skills`）與前端 Studio 的洋蔥式 Prompt 檢視器完全過濾遮蔽，防止一般使用者窺探或關閉底層守則（`ADR-0004`）
-- [ ] 第一階段技能目錄每項待命技能僅注入精簡描述（低於 60 tokens）；當代理呼叫 `activate_skill` 後，下一輪編譯動態掛載第二階段完整 SOP 與 CLI 呼叫指引，並透過 SSE 推播 `skill_activated` 事件（`REQ-014`, `TC-M5-02`）
-- [ ] 提供規範與技能的 CRUD API 與角色 M:N 綁定管理，並在前端 Studio 提供規範綁定選擇器、技能編輯視窗與「洋蔥式 Prompt 即時檢視器與測試沙盒」（`REQ-013`, `REQ-014`, `UI_SPEC.md`）
+- [x] 擴充 `rules_registry` 與 `skills_registry` 支援 `is_visible_to_user`（預設 `true`）與 `approval_status` 欄位（`ADR-0004`）
+- [x] 洋蔥式編譯器固定以 `GLOBAL_MANDATORY` 與當前使用者所屬部門之 `DEPARTMENT_SHARED` 規範作為最外層靜態前綴（依 `priority` 與 `code` 確定性排序），並將動態工具定義固定置於最外層尾端（Layer 6），確保多人同時在線時 Layer 1~4 的 SGLang KV Cache 前綴 100% 共享（`REQ-013`, `ADR-003`, `ADR-0002`）
+- [x] 嚴格隔離角色專屬規範：`SA` 編譯後的提示詞包含全公司規範與 `RULE_SA_OPENAPI_AND_ERD`，且 0% 包含 `FIN` 或 `SE` 的專屬規範（`TC-M5-01`）
+- [x] 系統底層隱藏保護：設為 `is_visible_to_user = false` 的底層 Rules 與 Skills 在後端編譯時強制載入，但一般使用者的查詢 API（`GET /api/v1/rules`, `GET /api/v1/skills`）與前端 Studio 的洋蔥式 Prompt 檢視器完全過濾遮蔽，防止一般使用者窺探或關閉底層守則（`ADR-0004`）
+- [x] 第一階段技能目錄每項待命技能僅注入精簡描述（低於 60 tokens）；當代理呼叫 `activate_skill` 後，下一輪編譯動態掛載第二階段完整 SOP 與 CLI 呼叫指引，並透過 SSE 推播 `skill_activated` 事件（`REQ-014`, `TC-M5-02`）
+- [x] 提供規範與技能的 CRUD API 與角色 M:N 綁定管理，並在前端 Studio 提供規範綁定選擇器、技能編輯視窗與「洋蔥式 Prompt 即時檢視器與測試沙盒」（`REQ-013`, `REQ-014`, `UI_SPEC.md`）

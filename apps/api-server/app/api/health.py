@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 EXPECTED_ROLES = 7
-EXPECTED_RULES = 5
-EXPECTED_SKILLS = 4
+EXPECTED_RULES = 6
+EXPECTED_SKILLS = 5
 
 
 class SeedCounts(BaseModel):

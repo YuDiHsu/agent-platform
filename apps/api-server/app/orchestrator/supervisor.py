@@ -224,6 +224,13 @@ class ChatTurn:
                 original_query=self._message,
                 instructions=instructions,
             )
+            if outcome.skill_activated is not None:
+                await self._emit(
+                    "skill_activated",
+                    role_code=outcome.skill_activated["role_code"],
+                    content=f"已啟用技能 {outcome.skill_activated['skill_code']}",
+                    payload=outcome.skill_activated,
+                )
         if outcome.kind == "completed" and outcome.pointer is not None:
             self._pointers[int(node["step_id"])] = outcome.pointer
             payload = outcome.pointer.model_dump()

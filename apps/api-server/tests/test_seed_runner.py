@@ -29,11 +29,11 @@ async def test_seed_loads_roles_rules_skills_and_can_run_twice() -> None:
         catalog = await read_builtin_catalog(session)
 
     assert first.roles == 7
-    assert first.rules == 5
-    assert first.skills == 4
+    assert first.rules == 6
+    assert first.skills == 5
     assert second.roles == 7
-    assert second.rules == 5
-    assert second.skills == 4
+    assert second.rules == 6
+    assert second.skills == 5
     assert {role.code: role.id for role in catalog.roles} == role_ids
 
     roles = {role.code: role for role in catalog.roles}
@@ -50,7 +50,7 @@ async def test_seed_loads_roles_rules_skills_and_can_run_twice() -> None:
         assert _unit(role.embedding) == pytest.approx(1.0)
 
     rules = {rule.code: rule for rule in catalog.rules}
-    assert sum(1 for rule in rules.values() if rule.scope_type == "GLOBAL_MANDATORY") == 2
+    assert sum(1 for rule in rules.values() if rule.scope_type == "GLOBAL_MANDATORY") == 3
     assert sum(1 for rule in rules.values() if rule.scope_type == "ROLE_EXCLUSIVE") == 3
     assert rules["RULE_GLOBAL_ZH_TW"].priority == 10
     assert rules["RULE_GLOBAL_ZERO_TRUST_DLP"].priority == 20
@@ -68,6 +68,7 @@ async def test_seed_loads_roles_rules_skills_and_can_run_twice() -> None:
         "SKILL_SA_OPENAPI_CLI_VALIDATOR",
         "SKILL_FIN_PYTHON_IRR_CALCULATOR",
         "SKILL_SE_PYTEST_AND_GIT_DIAGNOSTICS",
+        "SKILL_HIDDEN_GUARDRAIL",
     }
     assert skills["SKILL_SA_OPENAPI_CLI_VALIDATOR"].execution_mode == "SERVER_SANDBOX_CLI"
     assert skills["SKILL_SE_PYTEST_AND_GIT_DIAGNOSTICS"].execution_mode == "LOCAL_DAEMON_CLI"

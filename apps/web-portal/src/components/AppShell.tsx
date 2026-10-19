@@ -68,9 +68,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       <button type="button" className="nav-link" aria-disabled="true" disabled>
         產出物中心（稍後提供）
       </button>
-      <button type="button" className="nav-link" aria-disabled="true" disabled>
-        自建工作坊（稍後提供）
-      </button>
+      <Link
+        className="nav-link"
+        href="/studio"
+        aria-current={pathname.startsWith("/studio") ? "page" : undefined}
+        onClick={() => setNavOpen(false)}
+      >
+        自建工作坊
+      </Link>
       <button type="button" className="nav-link" aria-disabled="true" disabled>
         連接器與排程（稍後提供）
       </button>

@@ -8,11 +8,22 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from app.db.models import HitlApprovalRequest, TaskTicket
+from app.db.models import ChatSession, HitlApprovalRequest, TaskTicket, User
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.artifact_manager import store_artifact
+from app.orchestrator.prompt_compiler import PromptCompiler
 from app.orchestrator.state import ArtifactPointer, SubAgentExecutionOutput
+
+def _activated_skill(output: SubAgentExecutionOutput) -> str | None:
+    if output.execution_status != "NEED_TOOL_CALL" or not output.tool_calls:
+        return None
+    call = output.tool_calls[0]
+    if call.tool_name != "activate_skill":
+        return None
+    code = call.arguments.get("skill_code")
+    return str(code) if code else None
+
 
 BROWSER_WAIT_TOOLS = {"workspace_list_files", "workspace_read_file"}
 
@@ -26,6 +37,7 @@ class StepOutcome:
     created_at: str | None = None
     hitl: dict[str, Any] | None = None
     detail: str | None = None
+    skill_activated: dict[str, str] | None = None
 
 
 def wait_status_for(tool_name: str) -> str:
@@ -58,9 +70,11 @@ class RoleRunner:
     ) -> StepOutcome:
         """Call the model only after the database session has been closed."""
 
+        prompt = await self._system_prompt(role_code=role_code, user_id=user_id, session_id=chat_session_id)
+        activated: dict[str, str] | None = None
         try:
             output = await self._llm.generate_structured(
-                system_prompt="你是企業角色代理。只根據產出物指標工作，不要在回覆中複寫上游全文。",
+                system_prompt=prompt,
                 messages=[
                     {
                         "role": "user",
@@ -69,6 +83,22 @@ class RoleRunner:
                 ],
                 response_model=SubAgentExecutionOutput,
             )
+            if _activated_skill(output) is not None:
+                skill_code = _activated_skill(output)
+                assert skill_code is not None
+                await self._remember_skill(chat_session_id, role_code, skill_code)
+                activated = {"role_code": role_code, "skill_code": skill_code}
+                prompt = await self._system_prompt(role_code=role_code, user_id=user_id, session_id=chat_session_id)
+                output = await self._llm.generate_structured(
+                    system_prompt=prompt,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": f"target_role_code: {role_code}\n已啟用技能 {skill_code}。使用者原話：{original_query}\n{instructions}",
+                        }
+                    ],
+                    response_model=SubAgentExecutionOutput,
+                )
         except Exception as exc:
             await self._fail(ticket_id, str(exc))
             return StepOutcome(kind="failed", detail=str(exc))
@@ -79,15 +109,15 @@ class RoleRunner:
             ticket.locked_by_worker = None
             ticket.locked_at = None
             if output.execution_status == "COMPLETED":
-                return await self._complete(
+                outcome = await self._complete(
                     db,
                     ticket,
                     chat_session_id=chat_session_id,
                     role_code=role_code,
                     output=output,
                 )
-            if output.execution_status == "NEED_TOOL_CALL":
-                return await self._wait(
+            elif output.execution_status == "NEED_TOOL_CALL":
+                outcome = await self._wait(
                     db,
                     ticket,
                     chat_session_id=chat_session_id,
@@ -95,9 +125,12 @@ class RoleRunner:
                     role_code=role_code,
                     output=output,
                 )
-            ticket.status = "FAILED"
-            ticket.error_log = output.thought_process
-            return StepOutcome(kind="failed", detail=output.thought_process)
+            else:
+                ticket.status = "FAILED"
+                ticket.error_log = output.thought_process
+                outcome = StepOutcome(kind="failed", detail=output.thought_process)
+            outcome.skill_activated = activated
+            return outcome
 
     async def _complete(
         self,
@@ -183,6 +216,38 @@ class RoleRunner:
                 "status": "PENDING",
             }
         return StepOutcome(kind="hibernated", wait_status=status, hitl=hitl, detail=call.tool_name)
+
+    async def _system_prompt(self, *, role_code: str, user_id: UUID, session_id: UUID) -> str:
+        from sqlalchemy import select
+
+        from app.db.models import AgentRole
+
+        async with database_session() as db:
+            role = await db.scalar(select(AgentRole).where(AgentRole.code == role_code))
+            user = await db.get(User, user_id)
+            if role is None or user is None:
+                return "你是企業角色代理。只根據產出物指標工作，不要在回覆中複寫上游全文。"
+            chat = await db.get(ChatSession, session_id)
+            activated: list[str] = []
+            if chat is not None and chat.checkpoint:
+                raw = chat.checkpoint.get("activated_skills", {}).get(role_code, [])
+                activated = [str(item) for item in raw]
+            compiled = await PromptCompiler().compile_for_role(db, role, user.department, activated)
+            return compiled.system_prompt
+
+    async def _remember_skill(self, session_id: UUID, role_code: str, skill_code: str) -> None:
+        async with database_session() as db:
+            chat = await db.get(ChatSession, session_id)
+            if chat is None:
+                return
+            checkpoint = dict(chat.checkpoint or {})
+            by_role = dict(checkpoint.get("activated_skills", {}))
+            codes = list(by_role.get(role_code, []))
+            if skill_code not in codes:
+                codes.append(skill_code)
+            by_role[role_code] = codes
+            checkpoint["activated_skills"] = by_role
+            chat.checkpoint = checkpoint
 
     async def _fail(self, ticket_id: UUID, detail: str) -> None:
         async with database_session() as db:

@@ -142,6 +142,8 @@ class SeedRunner:
             "priority": int(doc["priority"]),
             "rule_content_markdown": str(doc["rule_content_markdown"]).strip(),
             "glob_trigger": doc.get("glob_trigger"),
+            "is_visible_to_user": bool(doc.get("is_visible_to_user", True)),
+            "approval_status": str(doc.get("approval_status", "APPROVED")),
             "is_active": True,
         }
         if existing is None:
@@ -165,6 +167,8 @@ class SeedRunner:
             "execution_mode": str(doc["execution_mode"]),
             "cli_config": doc.get("cli_config"),
             "required_tool_namespaces": list(doc.get("required_tool_namespaces", [])),
+            "is_visible_to_user": bool(doc.get("is_visible_to_user", True)),
+            "approval_status": str(doc.get("approval_status", "APPROVED")),
             "is_active": True,
         }
         if existing is None:

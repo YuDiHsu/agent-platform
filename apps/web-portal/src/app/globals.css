@@ -171,6 +171,20 @@ button:disabled, .text-button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .nav-link[aria-disabled="true"] { color: var(--muted); }
 
+.studio-page { padding: 1.5rem; }
+.studio-grid { display: grid; grid-template-columns: minmax(16rem, 22rem) 1fr; gap: 1.5rem; }
+.studio-block, .modal-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; }
+.studio-block pre, .onion-full { white-space: pre-wrap; font-size: 0.85rem; }
+.onion-layer { margin-bottom: 0.75rem; border-left: 4px solid var(--pine); padding-left: 0.75rem; }
+.layer-6 { border-left-color: var(--danger); }
+.chip-list, .check-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.locked-chip { background: var(--paper-deep); border-radius: 999px; padding: 0.2rem 0.6rem; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(28, 25, 21, 0.45); display: grid; place-items: center; }
+.modal-card { width: min(32rem, calc(100% - 2rem)); display: grid; gap: 0.75rem; }
+.modal-card label, .studio-page label { display: grid; gap: 0.25rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+@media (max-width: 960px) { .studio-grid { grid-template-columns: 1fr; } }
+
 .stage { flex: 1; min-width: 0; display: flex; flex-direction: column; background: transparent; }
 .stage-scroll { flex: 1; overflow: auto; padding: 28px 32px 16px; }
 

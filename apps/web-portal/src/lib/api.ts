@@ -137,3 +137,79 @@ export async function streamMessage(
     }
   }
 }
+
+export interface CatalogRule {
+  code: string;
+  name: string;
+  scope_type: string;
+  priority: number;
+  rule_content_markdown: string;
+  is_visible_to_user: boolean;
+}
+
+export interface CatalogSkill {
+  code: string;
+  name: string;
+  trigger_description: string;
+  sop_markdown: string;
+  execution_mode: string;
+  is_visible_to_user: boolean;
+}
+
+export interface PromptLayer {
+  layer: number;
+  heading: string;
+  body: string;
+}
+
+export async function fetchRules(): Promise<CatalogRule[]> {
+  const response = await fetch(`${apiBase}/api/v1/rules`, { headers: headers() });
+  if (!response.ok) throw new Error("無法讀取規範。");
+  return (await response.json()) as CatalogRule[];
+}
+
+export async function fetchSkills(): Promise<CatalogSkill[]> {
+  const response = await fetch(`${apiBase}/api/v1/skills`, { headers: headers() });
+  if (!response.ok) throw new Error("無法讀取技能。");
+  return (await response.json()) as CatalogSkill[];
+}
+
+export async function saveSkill(input: {
+  code: string;
+  name: string;
+  trigger_description: string;
+  sop_markdown: string;
+  execution_mode: string;
+}): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/skills`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("無法建立技能。");
+}
+
+export async function bindSkill(roleCode: string, skillCode: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/roles/${roleCode}/skills/${skillCode}`, {
+    method: "PUT",
+    headers: headers(),
+  });
+  if (!response.ok) throw new Error("無法綁定技能。");
+}
+
+export async function fetchOnion(roleCode: string): Promise<{ prompt: string; layers: PromptLayer[] }> {
+  const response = await fetch(`${apiBase}/api/v1/studio/roles/${roleCode}/prompt`, { headers: headers() });
+  if (!response.ok) throw new Error("無法編譯提示詞。");
+  return (await response.json()) as { prompt: string; layers: PromptLayer[] };
+}
+
+export async function tryRole(roleCode: string, message: string): Promise<{ prompt: string; model_output: unknown; inference_error: string | null }> {
+  const response = await fetch(`${apiBase}/api/v1/studio/roles/${roleCode}/try`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ message }),
+  });
+  if (!response.ok) throw new Error("測試沙盒沒有回應。");
+  return (await response.json()) as { prompt: string; model_output: unknown; inference_error: string | null };
+}
+

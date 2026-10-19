@@ -183,6 +183,16 @@ class RuleRegistry(Base):
     priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("100"))
     rule_content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
     glob_trigger: Mapped[str | None] = mapped_column(String(255))
+    is_visible_to_user: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+    approval_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'APPROVED'"),
+    )
     is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text("true"))
     created_at: Mapped[datetime | None] = _created_at()
 
@@ -245,6 +255,16 @@ class SkillRegistry(Base):
         JSONB,
         nullable=False,
         server_default=text("'[]'::jsonb"),
+    )
+    is_visible_to_user: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+    )
+    approval_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'APPROVED'"),
     )
     is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text("true"))
     created_at: Mapped[datetime | None] = _created_at()

@@ -21,5 +21,5 @@ async def test_health_reports_infrastructure_and_seed() -> None:
         "status": "ok",
         "postgres": "ok",
         "redis": "ok",
-        "seed": {"roles": 7, "rules": 5, "skills": 4},
+        "seed": {"roles": 7, "rules": 6, "skills": 5},
     }
