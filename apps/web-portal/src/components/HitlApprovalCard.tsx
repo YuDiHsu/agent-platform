@@ -29,7 +29,10 @@ export function HitlApprovalCard({ request }: { request: HitlRequestUI }) {
         工具 <strong>{request.tool_name}</strong>
         <span className="badge status-pending">{request.execution_target}</span>
       </p>
-      <pre>{JSON.stringify(request.proposed_payload, null, 2)}</pre>
+      <details>
+        <summary>參數預覽</summary>
+        <pre>{JSON.stringify(request.proposed_payload, null, 2)}</pre>
+      </details>
       <div className="hitl-actions">
         <button type="button" className="quiet-action" disabled={!pending} onClick={() => void send("APPROVED")}>
           核准執行

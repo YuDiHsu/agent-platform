@@ -166,6 +166,126 @@ class ChatTurn:
                     payload={"text": FAILED_MESSAGE, "session_status": "FAILED"},
                 )
                 return
+        await self._finish_completed()
+
+    async def resume_after_decision(self, *, ticket_id: UUID, instructions: str) -> StepOutcome:
+        """Wake one paused ticket, then run every later step still stored in the checkpoint."""
+
+        await self._load_quota()
+        await self._restore_checkpoint()
+        node = next((item for item in self._snapshot if str(item["ticket_id"]) == str(ticket_id)), None)
+        if node is None:
+            return StepOutcome(kind="failed", detail="找不到暫停的工單")
+        await self._emit(
+            "role_switched",
+            role_code=str(node["target_role_code"]),
+            content=f"{node['target_role_code']} 依審批結果繼續：{node['task_title']}",
+            payload={
+                "active_role": node["target_role_code"],
+                "step_id": node["step_id"],
+                "task_title": node["task_title"],
+            },
+        )
+        outcome = await self._runner.infer_and_finish(
+            chat_session_id=self._session_id,
+            ticket_id=ticket_id,
+            role_code=str(node["target_role_code"]),
+            user_id=self._user_id,
+            original_query=self._message,
+            instructions=instructions,
+        )
+        if outcome.kind == "completed" and outcome.pointer is not None:
+            self._pointers[int(node["step_id"])] = outcome.pointer
+            payload = outcome.pointer.model_dump()
+            payload["step_id"] = node["step_id"]
+            payload["content_body"] = outcome.content_body or ""
+            payload["created_at"] = outcome.created_at or ""
+            await self._emit(
+                "artifact_created",
+                role_code=str(node["target_role_code"]),
+                content=outcome.pointer.summary_200_words,
+                payload=payload,
+            )
+        await self._sync_snapshot()
+        if outcome.kind != "completed":
+            await self._settle([outcome])
+            return outcome
+        steps = [
+            DAGTaskNode(
+                step_id=int(item["step_id"]),
+                target_role_code=str(item["target_role_code"]),
+                task_title=str(item["task_title"]),
+                detailed_instructions=str(item.get("detailed_instructions") or item["task_title"]),
+                depends_on_steps=[int(step) for step in item.get("depends_on_steps") or []],
+            )
+            for item in self._snapshot
+        ]
+        waves = execution_waves(steps)
+        if waves is None:
+            await self._mark_session("FAILED", None)
+            return StepOutcome(kind="failed", detail="任務圖無法續跑")
+        for wave in waves:
+            pending = [
+                item
+                for item in self._nodes_for(wave)
+                if item["status"] not in {"COMPLETED", "FAILED", "CIRCUIT_BROKEN"}
+            ]
+            if not pending:
+                continue
+            outcomes = await asyncio.gather(*(self._guarded(item) for item in pending))
+            await self._sync_snapshot()
+            if await self._settle(outcomes):
+                return outcome
+        await self._finish_completed()
+        return outcome
+
+    async def _restore_checkpoint(self) -> None:
+        async with database_session() as db:
+            chat = await db.get(ChatSession, self._session_id)
+            if chat is None:
+                return
+            self._snapshot = list(chat.dag_snapshot or [])
+            self._goal = chat.goal_statement or self._message
+            checkpoint = chat.checkpoint or {}
+            self._hop = int(checkpoint.get("hop_count") or 0)
+            step_ids = checkpoint.get("completed_step_ids") or []
+            pointers = checkpoint.get("artifact_pointers") or []
+            for step_id, raw in zip(step_ids, pointers, strict=False):
+                self._pointers[int(step_id)] = ArtifactPointer.model_validate(raw)
+
+    async def _settle(self, outcomes: list[StepOutcome]) -> bool:
+        if any(item.kind == "blocked" for item in outcomes):
+            await self._hibernate(CONCURRENT_MESSAGE, "CONCURRENT_TICKET_QUOTA", None, None)
+            return True
+        hibernated = next((item for item in outcomes if item.kind == "hibernated"), None)
+        if hibernated is not None:
+            message = BROWSER_MESSAGE if hibernated.wait_status == "WAITING_BROWSER" else HITL_MESSAGE
+            waiting = next(
+                (node for node in self._snapshot if node["status"] in {"WAITING_HITL", "WAITING_BROWSER"}),
+                None,
+            )
+            await self._hibernate(
+                message,
+                hibernated.wait_status or "WAITING_HITL",
+                hibernated.hitl,
+                None if waiting is None else int(waiting["step_id"]),
+            )
+            return True
+        if any(item.kind == "circuit" for item in outcomes):
+            await self._break_circuit()
+            return True
+        if any(item.kind == "failed" for item in outcomes):
+            await self._mark_session("FAILED", None)
+            await self._emit(
+                "final_response",
+                role_code="ORCH",
+                content=FAILED_MESSAGE,
+                payload={"text": FAILED_MESSAGE, "session_status": "FAILED"},
+            )
+            return True
+        return False
+
+    async def _finish_completed(self) -> None:
         titles = [self._pointers[step_id].title for step_id in sorted(self._pointers)]
         synthesis = "已完成：" + "、".join(titles)
         await self._mark_session("COMPLETED", None)

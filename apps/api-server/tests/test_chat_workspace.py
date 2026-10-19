@@ -173,6 +173,27 @@ class ScriptedGemma:
                     ),
                 ],
             )
+        if self.mode == "hitl_then_next":
+            return OrchestratorPlanOutput(
+                intent_mode="DELEGATE_DAG",
+                reasoning="寄信核准後才寫規格",
+                goal_statement="核准後繼續",
+                dag_steps=[
+                    DAGTaskNode(
+                        step_id=1,
+                        target_role_code="PM",
+                        task_title="寄出進度信",
+                        detailed_instructions="草擬信件",
+                    ),
+                    DAGTaskNode(
+                        step_id=2,
+                        target_role_code="SA",
+                        task_title="核准後的規格",
+                        detailed_instructions="補上規格",
+                        depends_on_steps=[1],
+                    ),
+                ],
+            )
         if self.mode in {"hitl", "read_pass", "draft_pass"}:
             return OrchestratorPlanOutput(
                 intent_mode="DELEGATE_DAG",
@@ -277,7 +298,7 @@ class ScriptedGemma:
                     )
                 ],
             )
-        if self.mode == "hitl" or (self.mode == "handoff_then_wait" and role == "PM"):
+        if role == "PM" and self.mode in {"hitl", "hitl_then_next", "handoff_then_wait"}:
             return SubAgentExecutionOutput(
                 execution_status="NEED_TOOL_CALL",
                 thought_process="需要寄信，先等待核准",
@@ -877,3 +898,37 @@ async def test_rejected_commit_returns_the_reason_to_the_role(
     tickets = after["tickets"]
     assert isinstance(tickets, list)
     assert tickets[0]["status"] == "COMPLETED"
+
+
+async def test_approval_continues_the_steps_saved_in_the_checkpoint(
+    client: httpx.AsyncClient,
+    scripted: ScriptedGemma,
+) -> None:
+    scripted.mode = "hitl_then_next"
+    user = await _login(client)
+    session_id = await _open_session(client, user)
+    await _send(client, user, session_id, "先寄信再補規格")
+    waiting = await _state(client, user, session_id)
+    tickets = waiting["tickets"]
+    assert isinstance(tickets, list)
+    assert {ticket["assigned_role_code"]: ticket["status"] for ticket in tickets} == {
+        "PM": "WAITING_HITL",
+        "SA": "PENDING",
+    }
+    pending = waiting["pending_hitl"]
+    assert isinstance(pending, list)
+    decided = await client.post(
+        f"/api/v1/hitl/{pending[0]['hitl_request_id']}/decide",
+        headers=_headers(user),
+        json={"status": "APPROVED"},
+    )
+    assert decided.status_code == 200
+    after = await _state(client, user, session_id)
+    finished = after["tickets"]
+    assert isinstance(finished, list)
+    assert {ticket["assigned_role_code"]: ticket["status"] for ticket in finished} == {
+        "PM": "COMPLETED",
+        "SA": "COMPLETED",
+    }
+    assert after["status"] == "COMPLETED"
+    assert after["pending_hitl"] == []

@@ -11,7 +11,7 @@ from app.api.deps import CurrentUser, get_llm, require_user
 from app.db.models import ChatSession, HitlApprovalRequest
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
-from app.orchestrator.role_runner import RoleRunner
+from app.orchestrator.supervisor import ChatTurn
 
 router = APIRouter()
 
@@ -62,28 +62,11 @@ async def decide_hitl(
         row.decided_at = datetime.now(UTC)
         ticket_id = row.ticket_id
         session_id = row.session_id
-        role_code = row.executing_role_code
 
-    outcome = await RoleRunner(llm).infer_and_finish(
-        chat_session_id=session_id,
+    outcome = await ChatTurn(llm, user_id=user.id, session_id=session_id, message=query).resume_after_decision(
         ticket_id=ticket_id,
-        role_code=role_code,
-        user_id=user.id,
-        original_query=query,
         instructions=instruction,
     )
-    async with database_session() as db:
-        chat = await db.get(ChatSession, session_id)
-        if chat is not None and outcome.kind == "completed":
-            chat.status = "COMPLETED"
-            chat.hold_reason = None
-            chat.checkpoint = None
-            chat.updated_at = datetime.now(UTC)
-        elif chat is not None and outcome.kind == "failed":
-            chat.status = "FAILED"
-            chat.hold_reason = None
-            chat.checkpoint = None
-            chat.updated_at = datetime.now(UTC)
     return {
         "status": body.status,
         "executed_payload": executed,

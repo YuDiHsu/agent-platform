@@ -118,6 +118,28 @@ interface WorkspaceState {
   setSessionId: (sessionId: string) => void;
 }
 
+function prependHitl(current: HitlRequestUI[], next: HitlRequestUI | null): HitlRequestUI[] {
+  if (next === null) return current;
+  if (current.some((item) => item.hitl_request_id === next.hitl_request_id)) return current;
+  return [next, ...current];
+}
+
+function clearDecidedStep(steps: DAGStepUI[], request: HitlRequestUI | undefined): DAGStepUI[] {
+  let cleared = false;
+  return steps.map((step) => {
+    if (
+      !cleared &&
+      request &&
+      step.status === "WAITING_HITL" &&
+      step.target_role_code === request.executing_role_code
+    ) {
+      cleared = true;
+      return { ...step, status: "COMPLETED" };
+    }
+    return step;
+  });
+}
+
 function asSteps(value: unknown): DAGStepUI[] {
   if (!Array.isArray(value)) return [];
   return value as DAGStepUI[];
@@ -173,9 +195,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set((state) => ({
       hitlRequests: state.hitlRequests.filter((item) => item.hitl_request_id !== requestId),
       hitlEditor: state.hitlEditor?.hitl_request_id === requestId ? null : state.hitlEditor,
-      dagSteps: state.dagSteps.map((step) =>
-        step.status === "WAITING_HITL" ? { ...step, status: "COMPLETED" } : step,
-      ),
+      dagSteps: clearDecidedStep(state.dagSteps, state.hitlRequests.find((item) => item.hitl_request_id === requestId)),
     })),
   pendingLocalDiff: null,
   terminalLogs: [],
@@ -261,7 +281,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       case "hitl_required": {
         const hitl = asHitl(payload);
         set((state) => ({
-          hitlRequests: [hitl, ...state.hitlRequests],
+          hitlRequests: prependHitl(state.hitlRequests, hitl),
           liveAnnouncement: `${hitl.executing_role_code} 等待人工審批 ${hitl.tool_name}`,
           dagSteps: state.dagSteps.map((step) =>
             step.target_role_code === payload.executing_role_code ? { ...step, status: "WAITING_HITL" } : step,
@@ -289,7 +309,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         const status = String(payload.status ?? "WAITING_HITL") as DagStatus;
         set((state) => ({
           liveAnnouncement: String(payload.text ?? "工作區已休眠。"),
-          hitlRequests: hitl ? [hitl, ...state.hitlRequests] : state.hitlRequests,
+          hitlRequests: prependHitl(state.hitlRequests, hitl),
           dagSteps: state.dagSteps.map((step) => (step.step_id === payload.step_id ? { ...step, status } : step)),
           messages: [
             ...state.messages,
