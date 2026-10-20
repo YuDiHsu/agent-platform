@@ -11,3 +11,7 @@
 - [ ] 重新登入仍能還原完整終端紀錄
 - [ ] 新增 `LOCAL_DAEMON_CLI` 路徑測試（假 Daemon）
 - [ ] 瀏覽器驗證終端機卡片逐段更新
+
+## Comments
+
+- 10 完成後：`LOCAL_DAEMON_CLI` 會送到使用者最近連線的配對 Daemon（`daemon_handle`），路由欄位為 `daemon:<user>:<pairing>`。假 Daemon 測試需先建立配對，並以 `ws_rpc_manager.register_daemon(user_id, pairing_id, socket)` 註冊；沒有配對時回傳「本機 Local MCP Daemon 未連線」。
