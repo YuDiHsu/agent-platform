@@ -9,11 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.health import router as health_router
 from app.api.v1_agents import router as agents_router
 from app.api.v1_chat import router as chat_router
+from app.api.v1_daemon import router as daemon_router
+from app.api.v1_heartbeats import router as heartbeats_router
 from app.api.v1_hitl import router as hitl_router
 from app.api.v1_rules_skills import router as rules_router
 from app.api.v1_mounts import router as mounts_router
 from app.api.v1_tools import router as tools_router
 from app.api.ws_client_tools import router as ws_router
+from app.api.ws_local_daemon import router as daemon_ws_router
 from app.core.config import settings
 from app.db.migrate import run_migrations
 from app.db.seed_runner import SeedRunner
@@ -49,7 +52,10 @@ app.include_router(health_router)
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(agents_router, prefix="/api/v1")
 app.include_router(hitl_router, prefix="/api/v1")
+app.include_router(heartbeats_router, prefix="/api/v1")
 app.include_router(rules_router, prefix="/api/v1")
 app.include_router(tools_router, prefix="/api/v1")
 app.include_router(mounts_router, prefix="/api/v1")
 app.include_router(ws_router, prefix="/api/v1")
+app.include_router(daemon_router, prefix="/api/v1")
+app.include_router(daemon_ws_router, prefix="/api/v1")

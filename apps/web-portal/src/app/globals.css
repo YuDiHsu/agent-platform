@@ -198,6 +198,19 @@ button:disabled, .text-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .wizard-steps { list-style: none; padding: 0; margin: 0; }
 .wizard-steps [aria-current="step"] { font-weight: 700; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.studio-block + .studio-block, .studio-page > .studio-block { margin-top: 16px; }
+.heartbeat-form { display: grid; grid-template-columns: 1fr 8rem 8rem; gap: 12px; align-items: end; margin-top: 12px; }
+.heartbeat-form .wide { grid-column: 1 / -1; }
+.heartbeat-form textarea { min-height: 4.5rem; }
+.heartbeat-form button { justify-self: start; }
+.daemon-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.daemon-issued { margin-top: 12px; padding: 12px; border: 1px solid var(--pine); border-radius: 10px; background: var(--paper-deep); }
+.daemon-issued pre { white-space: pre-wrap; word-break: break-all; font-size: 0.85rem; }
+.notice-list { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; }
+.notice { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: 10px; }
+.notice.attention { border-left-color: var(--danger); }
+.notice button { justify-self: start; }
+@media (max-width: 960px) { .heartbeat-form { grid-template-columns: 1fr; } }
 @media (max-width: 960px) { .studio-grid { grid-template-columns: 1fr; } }
 
 .stage { flex: 1; min-width: 0; display: flex; flex-direction: column; background: transparent; }

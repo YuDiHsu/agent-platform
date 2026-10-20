@@ -27,12 +27,14 @@ from app.db.models import (
     TaskTicket,
     ToolRegistry,
     User,
+    UserNotification,
     UserToolPreference,
 )
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 from app.orchestrator.runtime import spawn
 from app.orchestrator.supervisor import ChatTurn
+from app.workers.notifications import unread_notifications
 from app.workspace.roster import display_name, workspace_roles
 
 router = APIRouter()
@@ -211,7 +213,17 @@ async def bootstrap(user: CurrentUser = Depends(require_user)) -> dict[str, Any]
             "tool_preferences": [
                 {"code": code, "is_enabled": enabled} for code, enabled in preferences
             ],
+            "notifications": await unread_notifications(db, user.id),
         }
+
+
+@router.post("/users/me/notifications/{notification_id}/read", status_code=204)
+async def read_notification(notification_id: UUID, user: CurrentUser = Depends(require_user)) -> None:
+    async with database_session() as db:
+        row = await db.get(UserNotification, notification_id)
+        if row is None or row.user_id != user.id:
+            raise HTTPException(status_code=404, detail="找不到通知")
+        row.is_read = True
 
 
 @router.get("/chat/sessions/{session_id}/state")

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AgentWizard } from "@/components/studio/AgentWizard";
+import { HeartbeatSection } from "@/components/studio/HeartbeatSection";
 import { OnionInspector } from "@/components/studio/OnionInspector";
 import { RuleBindingSelector } from "@/components/studio/RuleBindingSelector";
 import { SkillEditorModal } from "@/components/studio/SkillEditorModal";
@@ -149,6 +150,7 @@ export default function StudioPage() {
           </button>
         </div>
       </section>
+      <HeartbeatSection agents={agents} />
       <AgentWizard agents={agents} rules={rules} skills={skills} onCreated={loadAgents} />
       <div className="studio-grid">
         <div>

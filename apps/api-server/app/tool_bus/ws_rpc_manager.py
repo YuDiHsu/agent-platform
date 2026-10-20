@@ -20,12 +20,44 @@ _OFFLINE = {
     "status": "BROWSER_OFFLINE",
     "error": "使用者的瀏覽器分頁未連線，請開啟平台網頁以授權存取本機資料夾。",
 }
+_DAEMON_OFFLINE = {
+    "status": "BROWSER_OFFLINE",
+    "error": "使用者的本機 Local MCP Daemon 未連線，請在電腦上啟動 Daemon。",
+}
+DAEMON_HANDLE_PREFIX = "daemon:"
+_DAEMON_ONLY_METHODS = {"DAEMON_EXEC_CLI"}
+_POLICY_VIOLATION = 1008
+
+
+def _socket_field(user_id: str, session_id: str) -> str:
+    return f"{user_id}:{session_id}"
+
+
+def _daemon_field(user_id: str, pairing_id: str) -> str:
+    return f"{DAEMON_HANDLE_PREFIX}{user_id}:{pairing_id}"
+
+
+def _route(requester_user_id: str, session_id: str, method: str, params: dict[str, Any]) -> str | None:
+    """The owners-hash field this call goes to; None when it needs a Daemon but names none."""
+
+    handle = str(params.get("browser_handle_key") or "")
+    if handle.startswith(DAEMON_HANDLE_PREFIX):
+        return _daemon_field(requester_user_id, handle.removeprefix(DAEMON_HANDLE_PREFIX))
+    if method in _DAEMON_ONLY_METHODS:
+        return None
+    return _socket_field(requester_user_id, session_id)
+
+
+def _offline_for(field: str | None) -> dict[str, str]:
+    return dict(_OFFLINE) if field and not field.startswith(DAEMON_HANDLE_PREFIX) else dict(_DAEMON_OFFLINE)
 
 
 class BrowserSocket(Protocol):
     async def accept(self) -> None: ...
 
     async def send_json(self, data: Any) -> None: ...
+
+    async def close(self, code: int = 1000) -> None: ...
 
 
 class _Commands(Protocol):
@@ -47,7 +79,7 @@ def _default_redis() -> _Commands:
 
 
 class WebSocketReverseRPCManager:
-    """Route CLIENT_FS_* calls to the worker that holds the browser socket."""
+    """Route CLIENT_FS_* calls to the worker holding the browser socket, and CLI or daemon mounts to the Daemon."""
 
     def __init__(
         self,
@@ -56,7 +88,7 @@ class WebSocketReverseRPCManager:
     ) -> None:
         self.worker_id = worker_id or f"worker-{uuid4().hex}"
         self._redis_factory = redis_factory or _default_redis
-        self._connections: dict[tuple[str, str], BrowserSocket] = {}
+        self._connections: dict[str, BrowserSocket] = {}
         self._pending: dict[str, asyncio.Future[Any]] = {}
         self._forwarded: dict[str, str] = {}
         self._commands: _Commands | None = None
@@ -71,17 +103,48 @@ class WebSocketReverseRPCManager:
         await self._ensure_listener()
 
     async def register_connection(self, user_id: str, session_id: str, websocket: BrowserSocket) -> None:
-        await websocket.accept()
-        self._connections[(user_id, session_id)] = websocket
-        await self._ensure_listener()
-        await self._commands_client().hset(_OWNERS, f"{user_id}:{session_id}", self.worker_id)
+        await self._register(_socket_field(user_id, session_id), websocket)
 
     async def unregister_connection(self, user_id: str, session_id: str) -> None:
-        self._connections.pop((user_id, session_id), None)
+        await self._unregister(_socket_field(user_id, session_id))
+
+    async def register_daemon(self, user_id: str, pairing_id: str, websocket: BrowserSocket) -> None:
+        await self._register(_daemon_field(user_id, pairing_id), websocket)
+
+    async def unregister_daemon(self, user_id: str, pairing_id: str, websocket: BrowserSocket) -> None:
+        field = _daemon_field(user_id, pairing_id)
+        if self._connections.get(field) is websocket:
+            await self._unregister(field)
+
+    async def close_daemon(self, user_id: str, pairing_id: str) -> None:
+        """Disconnect a revoked pairing's Daemon on whichever worker holds it."""
+
+        field = _daemon_field(user_id, pairing_id)
+        if field in self._connections:
+            await self._close_local(field)
+            return
+        owner = await self._commands_client().hget(_OWNERS, field)
+        if owner and owner != self.worker_id:
+            await self._publish(str(owner), {"kind": "close", "field": field})
+
+    async def _close_local(self, field: str) -> None:
+        socket = self._connections.get(field)
+        await self._unregister(field)
+        if socket is not None:
+            with contextlib.suppress(Exception):
+                await socket.close(code=_POLICY_VIOLATION)
+
+    async def _register(self, field: str, websocket: BrowserSocket) -> None:
+        await websocket.accept()
+        self._connections[field] = websocket
+        await self._ensure_listener()
+        await self._commands_client().hset(_OWNERS, field, self.worker_id)
+
+    async def _unregister(self, field: str) -> None:
+        self._connections.pop(field, None)
         client = self._commands
         if client is None:
             return
-        field = f"{user_id}:{session_id}"
         current = await client.hget(_OWNERS, field)
         if current == self.worker_id:
             await client.hdel(_OWNERS, field)
@@ -102,14 +165,17 @@ class WebSocketReverseRPCManager:
             method=method,
             params=params,
         )
-        socket = self._connections.get((requester_user_id, session_id))
+        field = _route(requester_user_id, session_id, method, params)
+        if field is None:
+            return _offline_for(field)
+        socket = self._connections.get(field)
         if socket is not None:
             return await self._wait_on(socket, method, params, timeout)
 
         await self._ensure_listener()
-        owner = await self._commands_client().hget(_OWNERS, f"{requester_user_id}:{session_id}")
+        owner = await self._commands_client().hget(_OWNERS, field)
         if not owner or owner == self.worker_id:
-            return dict(_OFFLINE)
+            return _offline_for(field)
 
         rpc_id = f"rpc_{uuid4().hex}"
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
@@ -120,8 +186,7 @@ class WebSocketReverseRPCManager:
                 "kind": "call",
                 "rpc_id": rpc_id,
                 "origin_worker": self.worker_id,
-                "user_id": requester_user_id,
-                "session_id": session_id,
+                "field": field,
                 "method": method,
                 "params": params,
             },
@@ -156,12 +221,11 @@ class WebSocketReverseRPCManager:
         self.resolve_rpc_response(rpc_id, payload)
 
     async def aclose(self) -> None:
-        keys = list(self._connections)
+        fields = list(self._connections)
         self._connections.clear()
         client = self._commands
         if client is not None:
-            for user_id, session_id in keys:
-                field = f"{user_id}:{session_id}"
+            for field in fields:
                 with contextlib.suppress(Exception):
                     current = await client.hget(_OWNERS, field)
                     if current == self.worker_id:
@@ -267,17 +331,20 @@ class WebSocketReverseRPCManager:
         if body.get("kind") == "call":
             await self._deliver(body)
             return
+        if body.get("kind") == "close":
+            await self._close_local(str(body.get("field", "")))
+            return
         if body.get("kind") == "result":
             payload = body.get("payload")
             self.resolve_rpc_response(str(body.get("rpc_id", "")), payload if isinstance(payload, dict) else {})
 
     async def _deliver(self, body: dict[str, Any]) -> None:
-        key = (str(body.get("user_id", "")), str(body.get("session_id", "")))
+        field = str(body.get("field", ""))
         origin = str(body.get("origin_worker", ""))
         rpc_id = str(body.get("rpc_id", ""))
-        socket = self._connections.get(key)
+        socket = self._connections.get(field)
         if socket is None:
-            await self._publish(origin, {"kind": "result", "rpc_id": rpc_id, "payload": dict(_OFFLINE)})
+            await self._publish(origin, {"kind": "result", "rpc_id": rpc_id, "payload": _offline_for(field)})
             return
         self._forwarded[rpc_id] = origin
         params = body.get("params")

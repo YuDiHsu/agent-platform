@@ -59,6 +59,104 @@ export interface BootstrapPayload {
   mounts: Array<{ mount_id: string; alias: string; handle_key: string | null }>;
   local_workspace_mounts: BootstrapMount[];
   pending_hitl: SessionSnapshot["pending_hitl"];
+  notifications: UserNotice[];
+}
+
+export interface UserNotice {
+  id: string;
+  kind: "HEARTBEAT_COMPLETED" | "LOCAL_MOUNT_OFFLINE" | "HITL_REQUIRED" | "HEARTBEAT_FAILED";
+  title: string;
+  body: string;
+  session_id: string | null;
+  created_at: string | null;
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/users/me/notifications/${id}/read`, {
+    method: "POST",
+    headers: headers(),
+  });
+  if (!response.ok) throw new Error("無法標記通知為已讀。");
+}
+
+export interface HeartbeatRoutine {
+  id: string;
+  title: string;
+  role_code: string;
+  instructions: string;
+  daily_time: string;
+  timezone: string;
+  is_enabled: boolean;
+  last_fired_on: string | null;
+}
+
+export async function fetchHeartbeats(): Promise<HeartbeatRoutine[]> {
+  const response = await fetch(`${apiBase}/api/v1/heartbeats`, { headers: headers() });
+  if (!response.ok) throw new Error("無法載入排程。");
+  return (await response.json()) as HeartbeatRoutine[];
+}
+
+export async function createHeartbeat(input: {
+  title: string;
+  role_code: string;
+  instructions: string;
+  daily_time: string;
+}): Promise<HeartbeatRoutine> {
+  const response = await fetch(`${apiBase}/api/v1/heartbeats`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (response.status === 404) throw new Error("工作區中找不到這個角色。");
+  if (!response.ok) throw new Error("無法建立排程，請確認時間格式為 HH:MM。");
+  return (await response.json()) as HeartbeatRoutine;
+}
+
+export async function patchHeartbeat(
+  id: string,
+  input: Partial<Pick<HeartbeatRoutine, "title" | "instructions" | "daily_time" | "is_enabled">>,
+): Promise<HeartbeatRoutine> {
+  const response = await fetch(`${apiBase}/api/v1/heartbeats/${id}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("無法更新排程。");
+  return (await response.json()) as HeartbeatRoutine;
+}
+
+export async function deleteHeartbeat(id: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/heartbeats/${id}`, { method: "DELETE", headers: headers() });
+  if (!response.ok) throw new Error("無法刪除排程。");
+}
+
+export interface DaemonPairing {
+  id: string;
+  label: string;
+  mount_id: string | null;
+  last_connected_at: string | null;
+  created_at: string | null;
+}
+
+export async function fetchDaemonPairings(): Promise<DaemonPairing[]> {
+  const response = await fetch(`${apiBase}/api/v1/daemon/pairings`, { headers: headers() });
+  if (!response.ok) throw new Error("無法載入本機 Daemon 配對。");
+  return (await response.json()) as DaemonPairing[];
+}
+
+export async function createDaemonPairing(label: string): Promise<DaemonPairing & { token: string; command: string }> {
+  const response = await fetch(`${apiBase}/api/v1/daemon/pairings`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ label }),
+  });
+  if (!response.ok) throw new Error("無法產生配對權杖。");
+  return (await response.json()) as DaemonPairing & { token: string; command: string };
+}
+
+export async function revokeDaemonPairing(id: string): Promise<void> {
+  const response = await fetch(`${apiBase}/api/v1/daemon/pairings/${id}`, { method: "DELETE", headers: headers() });
+  if (!response.ok) throw new Error("無法撤銷配對。");
 }
 
 export async function registerLocalMount(input: {

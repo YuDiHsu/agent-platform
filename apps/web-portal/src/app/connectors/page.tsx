@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { DaemonPairingSection } from "@/components/DaemonPairingSection";
 import { currentUserId, fetchTools, setToolPreference, type CatalogTool } from "@/lib/api";
 
 export default function ConnectorsPage() {
@@ -68,6 +69,7 @@ export default function ConnectorsPage() {
           </li>
         ))}
       </ul>
+      <DaemonPairingSection />
     </section>
   );
 }

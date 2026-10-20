@@ -172,4 +172,4 @@ def test_global_role_cannot_bind_a_local_mount() -> None:
             )
             cursor.execute("DELETE FROM agent_roles WHERE code LIKE 'CUSTOM_%'")
             cursor.execute("DELETE FROM local_workspace_mounts")
-            cursor.execute("DELETE FROM users WHERE email LIKE '%@example.com'")
+            cursor.execute("DELETE FROM users WHERE id IN (%s, %s)", (user_row[0], private_user[0]))

@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.14",
     "asyncpg>=0.30",
+    "celery[redis]>=5.4",
     "cryptography>=50.0.2",
     "fastapi>=0.115",
     "httpx>=0.28",
@@ -18,7 +19,9 @@ dependencies = [
     "pyyaml>=6.0",
     "redis>=5.2",
     "sqlalchemy[asyncio]>=2.0",
+    "tzdata>=2026.5",
     "uvicorn>=0.34",
+    "websockets>=14",
 ]
 
 [dependency-groups]
@@ -44,7 +47,7 @@ warn_unused_ignores = true
 disallow_any_generics = true
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "alembic.*", "markitdown", "markitdown.*"]
+module = ["pgvector.*", "alembic.*", "markitdown", "markitdown.*", "celery", "celery.*"]
 ignore_missing_imports = true
 
 [tool.uv]

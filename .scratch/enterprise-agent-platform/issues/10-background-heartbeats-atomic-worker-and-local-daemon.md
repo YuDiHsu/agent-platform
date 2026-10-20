@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] 背景工單 Worker 採用 `SELECT ... FOR UPDATE SKIP LOCKED` 原子爭取 `PENDING` 工單並記錄 `locked_by_worker` 與 `locked_at`，防止併發競爭（`REQ-002`, `REQ-011`）
-- [ ] 定時排程器（Heartbeat Cron）支援設定週期性背景工單，在使用者瀏覽器關閉狀態下仍可透過個人 OBO 權杖執行伺服器端連接器任務（`REQ-011`, `TC-M4-01`）
-- [ ] 當背景任務嘗試存取離線的 `BROWSER_FS_API` 本機掛載時，不會導致 Worker 崩潰，而是優雅記錄狀態並透過通知管道提醒使用者開啟頁面授權（`TC-M4-01`）
-- [ ] 選配的輕量 `Local MCP Daemon` 可透過 WebSocket 隧道註冊連線，在瀏覽器關閉時無縫處理被授權目錄內的檔案讀寫與 `LOCAL_DAEMON_CLI` 指令執行（含路徑邊界與黑名單檢查）（`REQ-005`, `REQ-016`, `TC-M4-02`）
+- [x] 背景工單 Worker 採用 `SELECT ... FOR UPDATE SKIP LOCKED` 原子爭取 `PENDING` 工單並記錄 `locked_by_worker` 與 `locked_at`，防止併發競爭（`REQ-002`, `REQ-011`）
+- [x] 定時排程器（Heartbeat Cron）支援設定週期性背景工單，在使用者瀏覽器關閉狀態下仍可透過個人 OBO 權杖執行伺服器端連接器任務（`REQ-011`, `TC-M4-01`）
+- [x] 當背景任務嘗試存取離線的 `BROWSER_FS_API` 本機掛載時，不會導致 Worker 崩潰，而是優雅記錄狀態並透過通知管道提醒使用者開啟頁面授權（`TC-M4-01`）
+- [x] 選配的輕量 `Local MCP Daemon` 可透過 WebSocket 隧道註冊連線，在瀏覽器關閉時無縫處理被授權目錄內的檔案讀寫與 `LOCAL_DAEMON_CLI` 指令執行（含路徑邊界與黑名單檢查）（`REQ-005`, `REQ-016`, `TC-M4-02`）

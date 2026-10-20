@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ArtifactWorkbench } from "@/components/ArtifactViewer";
 import { HitlApprovalCard } from "@/components/HitlApprovalCard";
+import { currentUserId, fetchBootstrap, markNotificationRead, type UserNotice } from "@/lib/api";
 import { useWorkspaceStore } from "@/lib/store/useWorkspaceStore";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -21,7 +22,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [hitlOpen, setHitlOpen] = useState(false);
   const hitlRequests = useWorkspaceStore((state) => state.hitlRequests);
   const [narrow, setNarrow] = useState(false);
+  const [notices, setNotices] = useState<UserNotice[]>([]);
   const isChat = pathname.startsWith("/chat");
+
+  useEffect(() => {
+    if (currentUserId() === null) return;
+    void fetchBootstrap()
+      .then((payload) => setNotices(payload.notifications ?? []))
+      .catch(() => setNotices([]));
+  }, [pathname]);
+
+  function dismissNotice(id: string) {
+    setNotices((current) => current.filter((notice) => notice.id !== id));
+    void markNotificationRead(id).catch(() => undefined);
+  }
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 960px)");
@@ -118,6 +132,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button type="button" className="chip" onClick={() => setHitlOpen(true)}>
             待審批 {hitlCount}
           </button>
+          {notices.length > 0 ? (
+            <button type="button" className="chip" onClick={() => setHitlOpen(true)}>
+              背景通知 {notices.length}
+            </button>
+          ) : null}
           <button type="button" className="ghost" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             {theme === "dark" ? "淺色" : "深色"}
@@ -141,11 +160,28 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       {hitlOpen ? (
         <>
-          <button type="button" className="drawer-backdrop" aria-label="關閉審批通知" onClick={() => setHitlOpen(false)} />
-          <div className="sheet right" role="dialog" aria-modal="true" aria-label="審批通知">
+          <button type="button" className="drawer-backdrop" aria-label="關閉通知" onClick={() => setHitlOpen(false)} />
+          <div className="sheet right" role="dialog" aria-modal="true" aria-label="通知">
             <button type="button" className="ghost" onClick={() => setHitlOpen(false)} autoFocus>
               關閉
             </button>
+            {notices.length > 0 ? (
+              <section aria-labelledby="notice-heading">
+                <h2 id="notice-heading">背景通知</h2>
+                <ul className="notice-list">
+                  {notices.map((notice) => (
+                    <li key={notice.id} className={notice.kind === "HEARTBEAT_COMPLETED" ? "notice" : "notice attention"}>
+                      <strong>{notice.title}</strong>
+                      {notice.body ? <span>{notice.body}</span> : null}
+                      <button type="button" className="ghost" onClick={() => dismissNotice(notice.id)}>
+                        標為已讀
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <h2>待審批</h2>
             {hitlRequests.length === 0 ? (
               <p>目前沒有待審批的操作。</p>
             ) : (

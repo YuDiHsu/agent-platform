@@ -334,6 +334,7 @@ class TaskTicket(Base):
     max_hops: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("8"))
     token_budget: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("16000"))
     tokens_consumed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    execution_lane: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'INTERACTIVE'"))
     locked_by_worker: Mapped[str | None] = mapped_column(String(100))
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     goal_ancestry: Mapped[list[Any]] = mapped_column(
@@ -658,3 +659,70 @@ class UserAgentConfig(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+
+
+class HeartbeatRoutine(Base):
+    """A user's daily background ticket, fired by Celery Beat. Implements: REQ-011."""
+
+    __tablename__ = "heartbeat_routines"
+    __table_args__ = (Index("ix_heartbeat_routines_user_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    role_code: Mapped[str] = mapped_column(String(64), ForeignKey("agent_roles.code"), nullable=False)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    daily_time: Mapped[str] = mapped_column(String(5), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("'Asia/Taipei'"))
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    last_fired_on: Mapped[str | None] = mapped_column(String(10))
+    created_at: Mapped[datetime | None] = _created_at()
+
+
+class UserNotification(Base):
+    """In-app notice for work that ran while the user was away. Implements: REQ-011, TC-M4-01."""
+
+    __tablename__ = "user_notifications"
+    __table_args__ = (Index("ix_user_notifications_user_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+    )
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime | None] = _created_at()
+
+
+class LocalDaemonPairing(Base):
+    """A Local MCP Daemon credential; only the SHA-256 of the token is stored. Implements: REQ-005."""
+
+    __tablename__ = "local_daemon_pairings"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    mount_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("local_workspace_mounts.id", ondelete="SET NULL"),
+    )
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    token_sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime | None] = _created_at()

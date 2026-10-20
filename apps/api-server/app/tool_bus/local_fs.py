@@ -18,6 +18,7 @@ _OFFLINE = {
     "error": "使用者的瀏覽器分頁未連線，請開啟平台網頁以授權存取本機資料夾。",
 }
 _RPC_TIMEOUT_SECONDS = 30.0
+DAEMON_PROVIDER = "LOCAL_MCP_DAEMON"
 
 
 def _schema(properties: dict[str, Any]) -> dict[str, Any]:
@@ -136,3 +137,19 @@ async def mount_owner_and_handle(user_id: str, mount_id: object) -> tuple[str, s
         if mount is None or not mount.browser_handle_key:
             return "", ""
         return str(mount.user_id), mount.browser_handle_key
+
+
+async def daemon_handle(user_id: str) -> str:
+    """The handle of the user's most recently connected Daemon, or "" when none is paired."""
+
+    async with database_session() as db:
+        handle = await db.scalar(
+            select(LocalWorkspaceMount.browser_handle_key)
+            .where(
+                LocalWorkspaceMount.user_id == UUID(user_id),
+                LocalWorkspaceMount.provider_type == DAEMON_PROVIDER,
+            )
+            .order_by(LocalWorkspaceMount.last_synced_at.desc().nulls_last())
+            .limit(1)
+        )
+        return handle or ""

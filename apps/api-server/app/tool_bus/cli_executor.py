@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.db.models import AgentRole, AgentRoleSkill, CliExecutionLog, SkillRegistry
 from app.db.session import database_session
 from app.tool_bus.audit import record_security_audit
-from app.tool_bus.local_fs import mount_owner_and_handle
+from app.tool_bus.local_fs import daemon_handle, mount_owner_and_handle
 from app.tool_bus.sandbox_runner import SandboxRunner
 from app.tool_bus.ws_rpc_manager import ws_rpc_manager
 
@@ -247,7 +247,11 @@ class SkillCLIExecutor:
             mount_owner_user_id=str(user_id),
             session_id=str(session_id),
             method="DAEMON_EXEC_CLI",
-            params={"command": prepared.rendered_command, "timeout": timeout},
+            params={
+                "browser_handle_key": await daemon_handle(str(user_id)),
+                "command": prepared.rendered_command,
+                "timeout": timeout,
+            },
             timeout=timeout + 5.0,
         )
         if rpc.get("status") != "SUCCESS":

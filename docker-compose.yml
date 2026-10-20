@@ -54,6 +54,34 @@ services:
       timeout: 5s
       retries: 20
 
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api-server/Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eamp:eamp@postgres:5432/eamp
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      api:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      dockerfile: apps/api-server/Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eamp:eamp@postgres:5432/eamp
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      api:
+        condition: service_healthy
+
   web:
     build:
       context: .
