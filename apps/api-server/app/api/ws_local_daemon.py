@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
-from app.api.v1_daemon import token_digest
+from app.core.pairing_token import token_digest
 from app.db.models import LocalDaemonPairing, LocalWorkspaceMount
 from app.db.session import database_session
 from app.tool_bus.ws_rpc_manager import ws_rpc_manager

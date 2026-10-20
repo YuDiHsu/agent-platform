@@ -19,7 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [navOpen, setNavOpen] = useState(false);
   const [benchOpen, setBenchOpen] = useState(false);
-  const [hitlOpen, setHitlOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const hitlRequests = useWorkspaceStore((state) => state.hitlRequests);
   const [narrow, setNarrow] = useState(false);
   const [notices, setNotices] = useState<UserNotice[]>([]);
@@ -129,11 +129,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="dot" aria-hidden="true" />
             本機掛載 0
           </span>
-          <button type="button" className="chip" onClick={() => setHitlOpen(true)}>
+          <button type="button" className="chip" onClick={() => setDrawerOpen(true)}>
             待審批 {hitlCount}
           </button>
           {notices.length > 0 ? (
-            <button type="button" className="chip" onClick={() => setHitlOpen(true)}>
+            <button type="button" className="chip" onClick={() => setDrawerOpen(true)}>
               背景通知 {notices.length}
             </button>
           ) : null}
@@ -158,11 +158,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="live" aria-live="polite">
         {liveAnnouncement}
       </div>
-      {hitlOpen ? (
+      {drawerOpen ? (
         <>
-          <button type="button" className="drawer-backdrop" aria-label="關閉通知" onClick={() => setHitlOpen(false)} />
+          <button type="button" className="drawer-backdrop" aria-label="關閉通知" onClick={() => setDrawerOpen(false)} />
           <div className="sheet right" role="dialog" aria-modal="true" aria-label="通知">
-            <button type="button" className="ghost" onClick={() => setHitlOpen(false)} autoFocus>
+            <button type="button" className="ghost" onClick={() => setDrawerOpen(false)} autoFocus>
               關閉
             </button>
             {notices.length > 0 ? (

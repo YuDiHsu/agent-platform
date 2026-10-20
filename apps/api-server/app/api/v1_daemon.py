@@ -1,7 +1,5 @@
 """Pair a Local MCP Daemon with the current user. Implements: REQ-005, ADR-0002."""
 
-import hashlib
-import secrets
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -11,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, require_user
+from app.core.pairing_token import new_pairing_token, token_digest
 from app.db.models import LocalDaemonPairing, LocalWorkspaceMount
 from app.db.session import database_session
 from app.tool_bus.local_fs import DAEMON_PROVIDER
@@ -21,10 +20,6 @@ router = APIRouter()
 
 class PairingCreate(BaseModel):
     label: str = Field(min_length=1, max_length=100)
-
-
-def token_digest(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _out(row: LocalDaemonPairing) -> dict[str, Any]:
@@ -60,7 +55,7 @@ async def list_pairings(user: CurrentUser = Depends(require_user)) -> list[dict[
 async def create_pairing(
     body: PairingCreate, request: Request, user: CurrentUser = Depends(require_user)
 ) -> dict[str, Any]:
-    token = secrets.token_urlsafe(32)
+    token = new_pairing_token()
     async with database_session() as db:
         mount = LocalWorkspaceMount(user_id=user.id, mount_alias=body.label, provider_type=DAEMON_PROVIDER)
         db.add(mount)

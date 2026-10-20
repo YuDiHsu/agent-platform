@@ -17,8 +17,16 @@ _Avoid_: Shared global state, temporary browser state
 _Avoid_: Router, controller
 
 **Task Ticket (工單)**:
-指派給單一角色執行的原子工作單元，具備上游目標繼承鏈（Goal Ancestry）、跳數上限（Max Hops）與執行狀態（`PENDING`、`IN_PROGRESS`、`WAITING_HITL`、`COMPLETED`、`FAILED`、`CIRCUIT_BROKEN`）。
+指派給單一角色執行的原子工作單元，具備上游目標繼承鏈（Goal Ancestry）、跳數上限（Max Hops）與執行狀態（`PENDING`、`IN_PROGRESS`、`WAITING_HITL`、`WAITING_BROWSER`、`COMPLETED`、`FAILED`、`CIRCUIT_BROKEN`）。
 _Avoid_: Job, subtask, thread
+
+**Execution Lane (執行通道)**:
+工單由誰驅動：`INTERACTIVE` 由使用者當下的對話回合執行；`BACKGROUND` 由背景 Worker 以 `SKIP LOCKED` 原子認領後執行，不需要使用者開著頁面。
+_Avoid_: Queue, priority
+
+**Heartbeat Routine (排程例行任務)**:
+使用者在工作坊「排程」設定、於指定時區每天固定時間建立一張背景工單的例行任務（例如每日 08:30 晨間摘要）；每天最多觸發一次，設定或改時間時若當天時間已過，從隔天開始。
+_Avoid_: Cron job, reminder
 
 **Artifact (交付產出物)**:
 角色完成工單後產出的完整專業文件、規格表、財務模型、架構圖或程式碼差異，以 Claim-Check 模式儲存，在對話狀態機中僅傳遞 200 字以內的摘要指標（Artifact Pointer）。
@@ -59,6 +67,14 @@ _Avoid_: Confirmation dialog, alert
 **Local Workspace Mount (本機工作區掛載)**:
 使用者透過瀏覽器原生檔案系統授權或本機守護進程綁定的個人電腦目錄，強制鎖定為本人私有（`PRIVATE`），禁止跨帳號存取。
 _Avoid_: Shared drive, uploaded folder
+
+**Local MCP Daemon (本機守護進程)**:
+工程師在自己電腦上啟動、以一次性配對權杖透過 WebSocket 連回平台的輕量程式，在瀏覽器關閉時代為服務一個本機資料夾的檔案讀寫與受黑名單限制的 CLI 指令；撤銷配對即中斷連線。
+_Avoid_: Agent, local server
+
+**User Notification (背景通知)**:
+背景工作完成、需要審批、需要本機資料夾或失敗時留給使用者的站內通知，在登入資料中送達並顯示於通知抽屜，標為已讀後不再出現。
+_Avoid_: Toast, alert, email
 
 **Chat Session (對話工作階段)**:
 使用者與代理群進行協作的持久化工作空間，完整保存跨次登入的歷史對話訊息、各角色執行軌跡、DAG 進度、產出物指標與待審批狀態。

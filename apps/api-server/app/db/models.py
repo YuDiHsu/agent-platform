@@ -26,6 +26,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from app.core.config import settings
 
 EMBEDDING_DIM = settings.EMBEDDING_DIMENSION
+INTERACTIVE_LANE = "INTERACTIVE"
+BACKGROUND_LANE = "BACKGROUND"
 
 
 class Base(DeclarativeBase):
@@ -334,7 +336,9 @@ class TaskTicket(Base):
     max_hops: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("8"))
     token_budget: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("16000"))
     tokens_consumed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
-    execution_lane: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'INTERACTIVE'"))
+    execution_lane: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text(f"'{INTERACTIVE_LANE}'")
+    )
     locked_by_worker: Mapped[str | None] = mapped_column(String(100))
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     goal_ancestry: Mapped[list[Any]] = mapped_column(

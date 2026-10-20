@@ -308,6 +308,12 @@ async def test_daemon_handler_reads_lists_and_writes_inside_its_root(tmp_path: P
     assert (tmp_path / "docs" / "new.md").read_text(encoding="utf-8") == "新內容"
 
 
+def test_daemon_refuses_the_same_sensitive_files_as_the_server() -> None:
+    from app.tool_bus import local_path_policy
+
+    assert _load_daemon()._SENSITIVE_FILE.pattern == local_path_policy._SENSITIVE_FILE.pattern
+
+
 @pytest.mark.parametrize("path", ["../outside.md", ".env", "repo/.git/config", "keys/id_rsa", "C:/Windows/win.ini"])
 async def test_daemon_handler_refuses_escaping_and_sensitive_paths(tmp_path: Path, path: str) -> None:
     module = _load_daemon()

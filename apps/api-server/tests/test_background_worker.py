@@ -8,15 +8,25 @@ Public seams:
 
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
 from sqlalchemy import select, update
 
 from app.core.crypto_vault import save_connector_token
-from app.db.models import ChatSession, HeartbeatRoutine, TaskTicket, ToolRegistry, User, UserToolPreference
+from app.db.models import (
+    AgentRole,
+    ChatSession,
+    HeartbeatRoutine,
+    TaskTicket,
+    ToolRegistry,
+    User,
+    UserAgentConfig,
+    UserToolPreference,
+)
 from app.db.seed_runner import SeedRunner
 from app.db.session import database_session, get_session_factory
 from app.llm.embedding_client import EmbeddingClient
@@ -77,10 +87,21 @@ async def seeded() -> None:
     async with database_session() as db:
         await db.execute(
             update(TaskTicket)
-            .where(TaskTicket.execution_lane == "BACKGROUND", TaskTicket.status == "PENDING")
+            .where(TaskTicket.execution_lane == "BACKGROUND", TaskTicket.status.in_(["PENDING", "IN_PROGRESS"]))
             .values(status="FAILED", error_log="上一個測試留下的背景工單")
         )
         await db.execute(update(HeartbeatRoutine).values(is_enabled=False))
+
+
+_TAIPEI = ZoneInfo("Asia/Taipei")
+
+
+def _taipei(days_from_today: int, hhmm: str) -> datetime:
+    """A UTC instant at ``hhmm`` Asia/Taipei, ``days_from_today`` days from the real local date."""
+
+    day = datetime.now(_TAIPEI).date() + timedelta(days=days_from_today)
+    hour, minute = (int(part) for part in hhmm.split(":"))
+    return datetime.combine(day, time(hour, minute), tzinfo=_TAIPEI).astimezone(UTC)
 
 
 async def _user() -> UUID:
@@ -134,6 +155,28 @@ async def test_concurrent_workers_claim_each_background_ticket_once(seeded: None
     assert by_id[interactive[0]].locked_by_worker is None
 
 
+async def test_a_ticket_locked_by_a_dead_worker_is_reclaimed_but_a_fresh_lock_is_not(seeded: None) -> None:
+    user_id = await _user()
+    stale, fresh = await _session_with_tickets(user_id, ["BACKGROUND", "BACKGROUND"])
+    async with database_session() as db:
+        for ticket_id, locked_at in ((stale, datetime.now(UTC) - timedelta(hours=2)), (fresh, datetime.now(UTC))):
+            ticket = await db.get(TaskTicket, ticket_id)
+            assert ticket is not None
+            ticket.status = "IN_PROGRESS"
+            ticket.locked_by_worker = "dead-worker"
+            ticket.locked_at = locked_at
+
+    first = await claim_background_ticket("worker-b")
+    second = await claim_background_ticket("worker-c")
+
+    assert first is not None and first.ticket_id == stale
+    assert second is None
+    async with database_session() as db:
+        row = await db.get(TaskTicket, stale)
+    assert row is not None
+    assert (row.status, row.locked_by_worker) == ("IN_PROGRESS", "worker-b")
+
+
 def _headers(user_id: UUID) -> dict[str, str]:
     return {"X-User-Id": str(user_id)}
 
@@ -164,6 +207,17 @@ async def test_heartbeat_routine_is_created_listed_and_validated(seeded: None, c
     assert bad_role.status_code == 404
     other = await client.get("/api/v1/heartbeats", headers=_headers(await _user()))
     assert other.json() == []
+
+    routine_id = listed.json()[0]["id"]
+    moved = await client.patch(
+        f"/api/v1/heartbeats/{routine_id}", headers=_headers(user_id), json={"timezone": "Europe/London"}
+    )
+    assert moved.status_code == 200
+    assert moved.json()["timezone"] == "Europe/London"
+    unknown = await client.patch(
+        f"/api/v1/heartbeats/{routine_id}", headers=_headers(user_id), json={"timezone": "Mars/Base"}
+    )
+    assert unknown.status_code == 422
 
 
 async def _routine(client: httpx.AsyncClient, user_id: UUID, daily_time: str = "08:30", role_code: str = "SA") -> str:
@@ -201,20 +255,50 @@ async def test_due_routine_fires_once_per_day_and_disabled_routine_never_fires(
     )
     assert patched.status_code == 200
 
-    # 08:29 and 08:30 in Asia/Taipei (UTC+8).
-    await fire_due_heartbeats(datetime(2026, 10, 20, 0, 29, tzinfo=UTC))
+    await fire_due_heartbeats(_taipei(1, "08:29"))
     assert await _background_tickets(user_id) == []
-    await fire_due_heartbeats(datetime(2026, 10, 20, 0, 30, tzinfo=UTC))
-    await fire_due_heartbeats(datetime(2026, 10, 20, 0, 45, tzinfo=UTC))
+    await fire_due_heartbeats(_taipei(1, "08:30"))
+    await fire_due_heartbeats(_taipei(1, "08:45"))
     tickets = await _background_tickets(user_id)
     assert [(ticket.assigned_role_code, ticket.status, ticket.input_instructions) for ticket in tickets] == [
         ("SA", "PENDING", "分類未讀信件")
     ]
-    await fire_due_heartbeats(datetime(2026, 10, 21, 0, 31, tzinfo=UTC))
+    await fire_due_heartbeats(_taipei(2, "08:31"))
     assert len(await _background_tickets(user_id)) == 2
     listed = await client.get("/api/v1/heartbeats", headers=_headers(user_id))
     fired = {item["id"]: item["last_fired_on"] for item in listed.json()}
-    assert fired == {routine_id: "2026-10-21", paused_id: None}
+    assert fired[routine_id] == _taipei(2, "08:31").astimezone(_TAIPEI).date().isoformat()
+
+
+async def test_a_routine_created_after_todays_time_first_fires_tomorrow(
+    seeded: None, client: httpx.AsyncClient
+) -> None:
+    user_id = await _user()
+    await _routine(client, user_id, "00:00")
+
+    await fire_due_heartbeats(datetime.now(UTC))
+    assert await _background_tickets(user_id) == []
+    await fire_due_heartbeats(_taipei(1, "00:00"))
+    assert len(await _background_tickets(user_id)) == 1
+
+
+async def test_a_routine_whose_role_was_disabled_does_not_fire_and_tells_the_user(
+    seeded: None, client: httpx.AsyncClient
+) -> None:
+    user_id = await _user()
+    await _routine(client, user_id, role_code="SA")
+    async with database_session() as db:
+        role = await db.scalar(select(AgentRole).where(AgentRole.code == "SA", AgentRole.creator_user_id.is_(None)))
+        assert role is not None
+        db.add(UserAgentConfig(user_id=user_id, role_id=role.id, is_enabled=False))
+
+    assert await fire_due_heartbeats(_taipei(1, "08:30")) == 0
+
+    assert await _background_tickets(user_id) == []
+    bootstrap = await client.get("/api/v1/users/me/bootstrap", headers=_headers(user_id))
+    [notice] = bootstrap.json()["notifications"]
+    assert notice["kind"] == "HEARTBEAT_FAILED"
+    assert "角色" in notice["title"]
 
 
 async def _enable_tool(user_id: UUID, code: str) -> None:
@@ -241,7 +325,7 @@ async def test_worker_runs_server_connector_with_obo_token_while_browser_is_clos
 
     set_http_client(httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     await _routine(client, user_id)
-    await fire_due_heartbeats(datetime(2026, 10, 20, 0, 30, tzinfo=UTC))
+    await fire_due_heartbeats(_taipei(1, "08:30"))
 
     result = await run_next_background_ticket(
         _ScriptedModel("o365_search_messages", {"query": "is:unread"}), worker_id="worker-a"
@@ -264,7 +348,7 @@ async def test_offline_local_mount_hibernates_the_ticket_and_notifies_the_user(
 ) -> None:
     user_id = await _user()
     await _routine(client, user_id, role_code="PM")
-    await fire_due_heartbeats(datetime(2026, 10, 20, 0, 30, tzinfo=UTC))
+    await fire_due_heartbeats(_taipei(1, "08:30"))
 
     result = await run_next_background_ticket(
         _ScriptedModel("workspace_read_file", {"path": "訪談紀錄.docx"}), worker_id="worker-a"

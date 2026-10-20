@@ -2,19 +2,19 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
-from app.db.models import ChatSession, TaskTicket
+from app.db.models import BACKGROUND_LANE, ChatSession, TaskTicket
 from app.db.session import database_session
 from app.llm.gemma_client import GemmaSGLangClient
 
 logger = logging.getLogger(__name__)
 
-BACKGROUND_LANE = "BACKGROUND"
+STALE_LOCK_AFTER = timedelta(minutes=30)
 
 RunOutcome = Literal["completed", "waiting_browser", "waiting_hitl", "failed"]
 
@@ -44,21 +44,30 @@ class ClaimedTicket:
 
 
 async def claim_background_ticket(worker_id: str) -> ClaimedTicket | None:
-    """Take the oldest PENDING background ticket that no other worker has locked."""
+    """Take the oldest PENDING background ticket, or one whose worker died holding it, that no one else has locked."""
 
+    now = datetime.now(UTC)
     async with database_session() as db:
         ticket = await db.scalar(
             select(TaskTicket)
-            .where(TaskTicket.execution_lane == BACKGROUND_LANE, TaskTicket.status == "PENDING")
+            .where(
+                TaskTicket.execution_lane == BACKGROUND_LANE,
+                or_(
+                    TaskTicket.status == "PENDING",
+                    and_(TaskTicket.status == "IN_PROGRESS", TaskTicket.locked_at < now - STALE_LOCK_AFTER),
+                ),
+            )
             .order_by(TaskTicket.created_at, TaskTicket.id)
             .limit(1)
             .with_for_update(skip_locked=True)
         )
         if ticket is None:
             return None
+        if ticket.status == "IN_PROGRESS":
+            logger.warning("reclaiming ticket %s from stale worker %s", ticket.id, ticket.locked_by_worker)
         ticket.status = "IN_PROGRESS"
         ticket.locked_by_worker = worker_id
-        ticket.locked_at = datetime.now(UTC)
+        ticket.locked_at = now
         return ClaimedTicket(
             ticket_id=ticket.id,
             session_id=ticket.session_id,
@@ -84,15 +93,9 @@ async def run_next_background_ticket(llm: GemmaSGLangClient, *, worker_id: str) 
     except Exception:
         logger.exception("background ticket %s failed", claimed.ticket_id)
         await _fail(claimed)
-    outcome = await _outcome(claimed.session_id)
+    outcome, session_title = await _outcome(claimed.session_id)
     kind, title = _NOTICES[outcome]
-    await notify(
-        user_id=claimed.user_id,
-        session_id=claimed.session_id,
-        kind=kind,
-        title=title,
-        body=await _session_title(claimed.session_id),
-    )
+    await notify(user_id=claimed.user_id, session_id=claimed.session_id, kind=kind, title=title, body=session_title)
     return BackgroundRun(ticket_id=claimed.ticket_id, session_id=claimed.session_id, outcome=outcome)
 
 
@@ -109,21 +112,17 @@ async def _fail(claimed: ClaimedTicket) -> None:
             chat.status = "FAILED"
 
 
-async def _outcome(session_id: UUID) -> RunOutcome:
+async def _outcome(session_id: UUID) -> tuple[RunOutcome, str]:
+    """How the run ended, and the session title to show in the notice."""
+
     async with database_session() as db:
         chat = await db.get(ChatSession, session_id)
     if chat is None:
-        return "failed"
+        return "failed", ""
     if chat.status == "COMPLETED":
-        return "completed"
+        return "completed", chat.title
     if chat.status == "HIBERNATING" and chat.hold_reason == "WAITING_BROWSER":
-        return "waiting_browser"
+        return "waiting_browser", chat.title
     if chat.status == "HIBERNATING" and chat.hold_reason == "WAITING_HITL":
-        return "waiting_hitl"
-    return "failed"
-
-
-async def _session_title(session_id: UUID) -> str:
-    async with database_session() as db:
-        chat = await db.get(ChatSession, session_id)
-    return "" if chat is None else chat.title
+        return "waiting_hitl", chat.title
+    return "failed", chat.title

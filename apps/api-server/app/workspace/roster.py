@@ -39,6 +39,10 @@ async def workspace_roles(db: AsyncSession, user_id: UUID) -> list[tuple[AgentRo
     return [(role, configs.get(role.id)) for role in visible]
 
 
+async def enabled_role_codes(db: AsyncSession, user_id: UUID) -> set[str]:
+    return {role.code for role, config in await workspace_roles(db, user_id) if config is None or config.is_enabled}
+
+
 def display_name(role: AgentRole, config: UserAgentConfig | None) -> str:
     if config is not None and config.name_override:
         return config.name_override

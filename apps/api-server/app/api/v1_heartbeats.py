@@ -1,5 +1,6 @@
 """Per-user daily background routines. Implements: REQ-011, TC-M4-01."""
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -7,11 +8,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, require_user
 from app.db.models import HeartbeatRoutine
 from app.db.session import database_session
-from app.workspace.roster import workspace_roles
+from app.workers.heartbeat_cron import skip_today_if_past
+from app.workspace.roster import enabled_role_codes
+
+_RESCHEDULING_FIELDS = {"daily_time", "timezone", "is_enabled"}
 
 router = APIRouter()
 
@@ -40,7 +45,13 @@ class HeartbeatPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     instructions: str | None = Field(default=None, min_length=1, max_length=4000)
     daily_time: str | None = Field(default=None, pattern=_TIME_PATTERN)
+    timezone: str | None = None
     is_enabled: bool | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def _timezone(cls, value: str | None) -> str | None:
+        return None if value is None else _known_timezone(value)
 
 
 def _out(row: HeartbeatRoutine) -> dict[str, Any]:
@@ -72,11 +83,10 @@ async def list_heartbeats(user: CurrentUser = Depends(require_user)) -> list[dic
 @router.post("/heartbeats", status_code=201)
 async def create_heartbeat(body: HeartbeatCreate, user: CurrentUser = Depends(require_user)) -> dict[str, Any]:
     async with database_session() as db:
-        roster = await workspace_roles(db, user.id)
-        enabled = {role.code for role, config in roster if config is None or config.is_enabled}
-        if body.role_code not in enabled:
+        if body.role_code not in await enabled_role_codes(db, user.id):
             raise HTTPException(status_code=404, detail="工作區中找不到這個角色")
         row = HeartbeatRoutine(user_id=user.id, **body.model_dump())
+        skip_today_if_past(row, datetime.now(UTC))
         db.add(row)
         await db.flush()
         await db.refresh(row)
@@ -89,8 +99,11 @@ async def update_heartbeat(
 ) -> dict[str, Any]:
     async with database_session() as db:
         row = await _owned(db, routine_id, user.id)
-        for field, value in body.model_dump(exclude_none=True).items():
+        changes = body.model_dump(exclude_none=True)
+        for field, value in changes.items():
             setattr(row, field, value)
+        if _RESCHEDULING_FIELDS & changes.keys():
+            skip_today_if_past(row, datetime.now(UTC))
         await db.flush()
         return _out(row)
 
@@ -101,9 +114,8 @@ async def delete_heartbeat(routine_id: UUID, user: CurrentUser = Depends(require
         await db.delete(await _owned(db, routine_id, user.id))
 
 
-async def _owned(db: Any, routine_id: UUID, user_id: UUID) -> HeartbeatRoutine:
+async def _owned(db: AsyncSession, routine_id: UUID, user_id: UUID) -> HeartbeatRoutine:
     row = await db.get(HeartbeatRoutine, routine_id)
     if row is None or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="找不到排程")
-    assert isinstance(row, HeartbeatRoutine)
     return row

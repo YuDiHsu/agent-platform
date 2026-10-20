@@ -186,19 +186,20 @@ class ChatTurn:
     ) -> StepOutcome:
         """Wake one paused ticket, then run every later step still stored in the checkpoint."""
 
-        return await self._continue_ticket(ticket_id, instructions, cli_outputs or [], "依審批結果繼續")
+        return await self._continue_ticket(ticket_id, instructions, cli_outputs or [], resume_label="依審批結果繼續")
 
     async def run_claimed_ticket(self, *, ticket_id: UUID, instructions: str) -> StepOutcome:
         """Run a ticket a background worker already locked, then every later step in the snapshot."""
 
-        return await self._continue_ticket(ticket_id, instructions, [], "背景開始執行")
+        return await self._continue_ticket(ticket_id, instructions, [], resume_label="背景開始執行")
 
     async def _continue_ticket(
         self,
         ticket_id: UUID,
         instructions: str,
         cli_outputs: list[dict[str, Any]],
-        verb: str,
+        *,
+        resume_label: str,
     ) -> StepOutcome:
         await self._load_quota()
         await self._restore_checkpoint()
@@ -208,7 +209,7 @@ class ChatTurn:
         await self._emit(
             "role_switched",
             role_code=str(node["target_role_code"]),
-            content=f"{node['target_role_code']} {verb}：{node['task_title']}",
+            content=f"{node['target_role_code']} {resume_label}：{node['task_title']}",
             payload={
                 "active_role": node["target_role_code"],
                 "step_id": node["step_id"],
